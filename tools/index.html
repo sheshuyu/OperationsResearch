@@ -416,8 +416,7 @@ canvas.objective-dragging { cursor: ns-resize; }
     <section class="section">
       <h2 class="section-title">求解选项</h2>
       <div class="stack">
-        <label class="checkbox-wrap"><input id="autoSolveCheck" type="checkbox" checked><span>自动求解</span></label>
-        <label class="checkbox-wrap"><input id="animateCheck" type="checkbox" checked><span>动画演示等值线</span></label>
+        <label class="checkbox-wrap"><input id="autoSolveCheck" type="checkbox"><span>自动求解与等值线动画</span></label>
         <label class="checkbox-wrap"><input id="snapObjectiveCheck" type="checkbox" checked><span>等值线自动吸附顶点</span></label>
         <div class="slider-wrap">
           <span class="hint">速度</span>
@@ -437,6 +436,7 @@ canvas.objective-dragging { cursor: ns-resize; }
         <label class="checkbox-wrap"><input id="showAxesCheck" type="checkbox" checked><span>显示坐标轴</span></label>
         <label class="checkbox-wrap"><input id="showLabelsCheck" type="checkbox" checked><span>标注顶点坐标</span></label>
         <label class="checkbox-wrap"><input id="showConstraintsCheck" type="checkbox"><span>显示约束文字</span></label>
+        <label class="checkbox-wrap"><input id="showFeasibleOnlyCheck" type="checkbox"><span>仅显示可行域</span></label>
         <div class="slider-wrap">
           <span class="hint">缩放</span>
           <input id="zoomRange" type="range" min="20" max="160" value="60">
@@ -501,8 +501,8 @@ canvas.objective-dragging { cursor: ns-resize; }
   const solutionStatus = $('solutionStatus');
   const statusIndicator = $('statusIndicator');
   const verticesList = $('verticesList'), verticesEmpty = $('verticesEmpty');
-  const showGridCheck = $('showGridCheck'), showAxesCheck = $('showAxesCheck'), showLabelsCheck = $('showLabelsCheck'), showConstraintsCheck = $('showConstraintsCheck');
-  const autoSolveCheck = $('autoSolveCheck'), animateCheck = $('animateCheck');
+  const showGridCheck = $('showGridCheck'), showAxesCheck = $('showAxesCheck'), showLabelsCheck = $('showLabelsCheck'), showConstraintsCheck = $('showConstraintsCheck'), showFeasibleOnlyCheck = $('showFeasibleOnlyCheck');
+  const autoSolveCheck = $('autoSolveCheck');
   const snapObjectiveCheck = $('snapObjectiveCheck');
   const speedRange = $('speedRange');
 
@@ -793,7 +793,7 @@ canvas.objective-dragging { cursor: ns-resize; }
     });
   }
 
-  // 画一条约束:直线 + 指向可行一侧的小箭头 + 标签
+  // 画一条约束直线及可选标签
   function drawConstraint(c, idx) {
     const pts = lineWorldPts(c.a, c.b, c.c);
     if (pts.length < 2) return;
@@ -817,27 +817,6 @@ canvas.objective-dragging { cursor: ns-resize; }
       haloText(renderConstraint(c), tx, ty - 6, { color, bold: true, size: 11, mono: true, align: 'left' });
     }
     ctx.restore();
-  }
-
-  // 指向可行半平面的小箭头(垂直于直线,朝可行侧)
-  function drawFeasibleArrows(c, idx) {
-    const pts = lineWorldPts(c.a, c.b, c.c);
-    if (pts.length < 2) return;
-    const p1 = toScreen(pts[0].x, pts[0].y), p2 = toScreen(pts[1].x, pts[1].y);
-    if (c.op === '=') return;
-    // 可行侧单位方向(世界坐标)
-    const g = Math.hypot(c.a, c.b) || 1;
-    const dir = c.op === '<=' ? { x: -c.a / g, y: -c.b / g } : { x: c.a / g, y: c.b / g };
-    const color = palette[idx % palette.length];
-    const dim = hoverIdx >= 0 && idx !== hoverIdx;
-    const ptsPx = [p1, p2];
-    // 两个采样点画小箭头,稀疏且克制
-    for (const t of [0.18, 0.5, 0.82]) {
-      const sx = ptsPx[0].x + (ptsPx[1].x - ptsPx[0].x) * t;
-      const sy = ptsPx[0].y + (ptsPx[1].y - ptsPx[0].y) * t;
-      const ox = sx + dir.x * 16, oy = sy - dir.y * 16;   // 屏幕 y 反向
-      chevronAt(ox, oy, dir.x, -dir.y, 6, color, dim ? 0.15 : 0.65);
-    }
   }
 
   // 目标等值线 + 沿法向的运动箭头
@@ -967,10 +946,6 @@ canvas.objective-dragging { cursor: ns-resize; }
       ctx.restore();
     }
 
-    if (showLabelsCheck.checked) {
-      haloText(`(${fmt(sol.best.x)}, ${fmt(sol.best.y)})`, p.x + 14, p.y - 12,
-        { bold: true, size: 12, mono: true, color: cssVar('--foreground'), align: 'left' });
-    }
     ctx.restore();
   }
 
@@ -1000,15 +975,44 @@ canvas.objective-dragging { cursor: ns-resize; }
     feedbackReq = requestAnimationFrame(pulse);
   }
 
-  function drawVertices(poly, best) {
+  // 当前等值线是否已经抵达最优目标值。未抵达前不绘制最优点高亮。
+  function isAtOptimalLevel(sol) {
+    if (!sol || sol.status !== 'ok' || !sol.best || !Number.isFinite(sol.value)) return false;
+    const level = animationActive ? animationLevel : objectiveLevel;
+    if (!Number.isFinite(level)) return false;
+    const tolerance = 1e-5 * Math.max(1, Math.abs(sol.value), Math.abs(level));
+    return Math.abs(level - sol.value) <= tolerance;
+  }
+
+  // 求当前 Z 等值线与可行多边形的一个代表交点，用于状态卡片展示 x1/x2。
+  function pointOnObjectiveLevel(level, poly) {
+    if (!Number.isFinite(level) || !poly || poly.length < 2) return null;
+    const points = [];
+    const eps = 1e-8 * Math.max(1, Math.abs(level));
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i], q = poly[(i + 1) % poly.length];
+      const dp = objective.a * p.x + objective.b * p.y - level;
+      const dq = objective.a * q.x + objective.b * q.y - level;
+      if (Math.abs(dp) <= eps) points.push({ x: p.x, y: p.y });
+      if (dp * dq < -eps * eps) {
+        const t = dp / (dp - dq);
+        points.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+      }
+    }
+    if (!points.length) return null;
+    // 交线通常有两个端点，取中点让卡片显示稳定，不随顶点顺序跳动。
+    const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+    return { x: sum.x / points.length, y: sum.y / points.length };
+  }
+
+  function drawVertices(poly) {
     if (!showLabelsCheck.checked) return;
     for (const v of poly) {
       if (isArtificial(v)) continue;
-      if (best && Math.hypot(v.x - best.x, v.y - best.y) < 1e-6) continue;
       const p = toScreen(v.x, v.y);
       pointMarker(p.x, p.y, 1.8);
       haloText(`(${fmt(v.x)}, ${fmt(v.y)})`, p.x, p.y - 9,
-        { size: 10, mono: true, color: cssVar('--muted-foreground'), align: 'center' });
+        { size: 10, mono: true, color: '#ffffff', align: 'center' });
     }
   }
 
@@ -1033,13 +1037,12 @@ canvas.objective-dragging { cursor: ns-resize; }
     }
 
     const sol = computeSolution();
-    drawConstraintRegions();
+    if (!showFeasibleOnlyCheck.checked) drawConstraintRegions();
     drawPolygon(sol.poly);
     constraints.forEach((c, i) => drawConstraint(c, i));
-    constraints.forEach((c, i) => drawFeasibleArrows(c, i));
     drawObjective();
 
-    if (sol.status === 'ok') { drawVertices(sol.poly, sol.best); drawBest(sol); }
+    if (sol.status === 'ok') { drawVertices(sol.poly); if (isAtOptimalLevel(sol)) drawBest(sol); }
     else if (sol.status === 'unbounded') { drawVertices(sol.poly); drawUnboundedArrow(sol.best); }
     else if (sol.status === 'infeasible') drawHint('约束交集为空：无可行解');
     else if (sol.status === 'empty') drawHint('请先添加约束和目标函数');
@@ -1066,9 +1069,20 @@ canvas.objective-dragging { cursor: ns-resize; }
 
     solutionCard.hidden = false;
     if (sol.status === 'ok') {
-      solutionTitle.textContent = '最优解';
-      solutionValue.textContent = (direction === 'max' ? 'Zmax = ' : 'Zmin = ') + fmt(sol.value);
-      solutionPoint.textContent = `x1 = ${fmt(sol.best.x)}，x2 = ${fmt(sol.best.y)}`;
+      if (isAtOptimalLevel(sol)) {
+        solutionTitle.textContent = '最优解';
+        solutionValue.textContent = (direction === 'max' ? 'Zmax = ' : 'Zmin = ') + fmt(sol.value);
+        solutionPoint.textContent = `x1 = ${fmt(sol.best.x)}，x2 = ${fmt(sol.best.y)}`;
+      } else {
+        const level = animationActive ? animationLevel : objectiveLevel;
+        const currentLevel = Number.isFinite(level) ? level : 0;
+        const currentPoint = pointOnObjectiveLevel(currentLevel, sol.poly);
+        solutionTitle.textContent = animationActive ? '等值线扫描中' : '当前状态';
+        solutionValue.textContent = `Z = ${fmt(currentLevel)}`;
+        solutionPoint.textContent = currentPoint
+          ? `x1 = ${fmt(currentPoint.x)}，x2 = ${fmt(currentPoint.y)}`
+          : '当前等值线未穿过可行域';
+      }
       hideStatus();
     } else if (sol.status === 'unbounded') {
       solutionTitle.textContent = '目标函数无界';
@@ -1151,7 +1165,7 @@ canvas.objective-dragging { cursor: ns-resize; }
     if (animationTween) { animationTween.kill(); animationTween = null; }
     animationReq = null;
     animationActive = false;
-    if (!animateCheck.checked) { draw(); return; }
+    if (!autoSolveCheck.checked) { draw(); return; }
     const sol = computeSolution();
     if (sol.status !== 'ok' || !sol.best) { draw(); return; }
     const target = sol.value;
@@ -1248,11 +1262,10 @@ canvas.objective-dragging { cursor: ns-resize; }
   });
   zoomInBtn.addEventListener('click', () => zoomAt(1.2, cssW() / 2, cssH() / 2));
   zoomOutBtn.addEventListener('click', () => zoomAt(1 / 1.2, cssW() / 2, cssH() / 2));
-  [showGridCheck, showAxesCheck, showLabelsCheck, showConstraintsCheck].forEach(el => el.addEventListener('change', draw));
-  autoSolveCheck.addEventListener('change', () => { if (autoSolveCheck.checked) startAnimation(); else { if (animationReq !== null) cancelAnimationFrame(animationReq); animationReq = null; animationActive = false; draw(); } });
-  animateCheck.addEventListener('change', () => { if (animateCheck.checked) startAnimation(); else { if (animationReq !== null) cancelAnimationFrame(animationReq); animationReq = null; animationActive = false; draw(); } });
+  [showGridCheck, showAxesCheck, showLabelsCheck, showConstraintsCheck, showFeasibleOnlyCheck].forEach(el => el.addEventListener('change', draw));
+  autoSolveCheck.addEventListener('change', () => { if (autoSolveCheck.checked) startAnimation(); else { if (animationReq !== null) cancelAnimationFrame(animationReq); if (animationTween) { animationTween.kill(); animationTween = null; } animationReq = null; animationActive = false; draw(); } });
   snapObjectiveCheck.addEventListener('change', draw);
-  speedRange.addEventListener('input', () => { if (animateCheck.checked && autoSolveCheck.checked) startAnimation(); });
+  speedRange.addEventListener('input', () => { if (autoSolveCheck.checked) startAnimation(); });
   exportBtn.addEventListener('click', () => {
     const link = document.createElement('a');
     link.download = 'lp-solver.png';
