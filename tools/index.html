@@ -455,6 +455,10 @@ canvas.objective-dragging { cursor: ns-resize; }
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.10);
   }
   .topbar-brand { display: flex; }
+  .input, .input-mono {
+    min-height: 44px;
+    font-size: 16px;
+  }
 
   .sidebar {
     position: fixed;
@@ -484,18 +488,20 @@ canvas.objective-dragging { cursor: ns-resize; }
   .sidebar .brand .sidebar-toggle {
     pointer-events: auto;
     margin-left: 0;
-    width: 42px;
-    height: 4px;
-    min-height: 4px;
+    width: 40px;
+    height: 22px;
+    min-height: 22px;
     padding: 0;
     border-radius: 999px;
-    background: var(--muted-foreground);
-    border: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
     font-size: 0;
-    opacity: 0.55;
   }
   .sidebar .brand .sidebar-toggle::after {
-    content: '';
+    content: '▾';
+    font-size: 14px;
+    line-height: 1;
+    color: var(--muted-foreground);
   }
   .sidebar .section { margin: 12px 12px 0; }
 
