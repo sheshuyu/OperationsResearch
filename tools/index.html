@@ -36,8 +36,10 @@
 
   /* 几何语义色 */
   --feasible-fill: rgba(37, 99, 235, 0.18);
+  --feasible-fill-strong: rgba(37, 99, 235, 0.30);
   --feasible-stroke: rgba(37, 99, 235, 0.86);
   --objective-stroke: #7c3aed;
+  --optimal-stroke: #f59e0b;
   --solution-core: #0d9488;
   --vertex-mark: #52525b;
   --grid-line: rgba(0, 0, 0, 0.055);
@@ -85,8 +87,10 @@
   --destructive-soft: #2a1215;
 
   --feasible-fill: rgba(96, 165, 250, 0.22);
+  --feasible-fill-strong: rgba(96, 165, 250, 0.38);
   --feasible-stroke: rgba(125, 211, 252, 0.90);
   --objective-stroke: #a78bfa;
+  --optimal-stroke: #facc15;
   --solution-core: #2dd4bf;
   --vertex-mark: #a1a1aa;
   --grid-line: rgba(255, 255, 255, 0.055);
@@ -131,9 +135,12 @@ button { cursor: pointer; border: 0; background: none; color: inherit; }
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+  transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .2s ease, padding .28s ease;
 }
 .sidebar::-webkit-scrollbar { width: 6px; }
 .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.sidebar::-webkit-scrollbar-track { background: var(--sidebar); }
+.dark .sidebar::-webkit-scrollbar-thumb { background: #3f3f46; }
 
 .brand { display: flex; align-items: center; gap: 10px; padding: 8px 10px 4px; }
 .brand-mark {
@@ -218,13 +225,14 @@ button { cursor: pointer; border: 0; background: none; color: inherit; }
 
 .constraints, .vertices { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .constraint-item {
-  display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+  display: grid; grid-template-columns: auto 1fr auto auto; gap: 6px; align-items: center;
   padding: 7px 9px;
   border-radius: var(--radius-sm);
   background: var(--background);
   border: 1px solid var(--border);
-  transition: border-color .12s ease, background-color .12s ease, opacity .12s ease;
+  transition: border-color .12s ease, background-color .12s ease, opacity .12s ease, transform .16s ease;
 }
+.constraint-item:hover { transform: translateX(2px); }
 .constraint-text, .vertex-coord {
   font-family: var(--font-mono); font-size: 12px;
   font-variant-ligatures: none;
@@ -234,6 +242,8 @@ button { cursor: pointer; border: 0; background: none; color: inherit; }
 .constraint-color { width: 9px; height: 9px; border-radius: 3px; background: var(--c); flex-shrink: 0; }
 .constraint-del { color: var(--muted-foreground); width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; font-size: 14px; line-height: 1; }
 .constraint-del:hover { color: var(--destructive); background: var(--destructive-soft); }
+.constraint-edit { color: var(--muted-foreground); width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; font-size: 12px; line-height: 1; }
+.constraint-edit:hover { color: var(--foreground); background: var(--accent); }
 .constraint-item.active { border-color: var(--ring); background: var(--muted); }
 
 .vertex-item {
@@ -305,6 +315,11 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="range"]::-moz-range-track { height: 4px; border-radius: 99px; background: var(--border); }
 input[type="range"]::-moz-range-progress { height: 4px; border-radius: 99px; background: var(--control-accent); }
 input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 2px solid var(--card); border-radius: 50%; background: var(--control-accent); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.dark input[type="range"]::-webkit-slider-runnable-track { background: linear-gradient(90deg, #71717a, #27272a); }
+.dark input[type="range"]::-webkit-slider-thumb { background: #e4e4e7; border-color: #18181b; }
+.dark input[type="range"]::-moz-range-track { background: #27272a; }
+.dark input[type="range"]::-moz-range-progress { background: #71717a; }
+.dark input[type="range"]::-moz-range-thumb { background: #e4e4e7; border-color: #18181b; }
 .slider-wrap .hint { font-variant-numeric: tabular-nums; }
 
 /* ============ 主区 ============ */
@@ -320,6 +335,10 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 2px s
 }
 .topbar-title { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
+.sidebar-toggle { min-width: 32px; padding: 0 9px; }
+.brand .sidebar-toggle { margin-left: auto; }
+.sidebar-reopen { display: none; position: fixed; top: calc(var(--solver-header) + 12px); left: 12px; z-index: 100; }
+body.sidebar-collapsed .sidebar-reopen { display: inline-flex; }
 
 .canvas-wrap { flex: 1; position: relative; overflow: hidden; background: var(--background); }
 canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
@@ -366,6 +385,12 @@ canvas.objective-dragging { cursor: ns-resize; }
 .solution-status.warn { background: var(--warning-soft); border-color: color-mix(in srgb, var(--warning) 35%, transparent); color: var(--warning); }
 .solution-status.err { background: var(--destructive-soft); border-color: color-mix(in srgb, var(--destructive) 35%, transparent); color: var(--destructive); }
 
+.section { transition: transform .24s ease, box-shadow .24s ease; }
+.section:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(0,0,0,.07); }
+
+.shell.sidebar-collapsed { grid-template-columns: 0 1fr; }
+.shell.sidebar-collapsed .sidebar { opacity: 0; transform: translateX(-18px); pointer-events: none; padding-left: 0; padding-right: 0; border: 0; }
+
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted-foreground); flex-shrink: 0; }
 .status-dot.ok { background: var(--success); }
 .status-dot.warn { background: var(--warning); }
@@ -375,6 +400,13 @@ canvas.objective-dragging { cursor: ns-resize; }
   .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .sidebar { max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--sidebar-border); }
   .solution-card { left: 12px; right: 12px; min-width: 0; }
+}
+@media (max-width: 880px) and (orientation: portrait) {
+  .shell { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .main { grid-row: 1; min-height: 0; }
+  .sidebar { grid-row: 2; max-height: 38vh; border-top: 1px solid var(--sidebar-border); border-bottom: 0; overflow-y: auto; }
+  .shell.sidebar-collapsed { grid-template-rows: 1fr 0; }
+  .shell.sidebar-collapsed .sidebar { transform: translateY(18px); }
 }
 </style>
 </head>
@@ -387,6 +419,7 @@ canvas.objective-dragging { cursor: ns-resize; }
         <strong>LP Solver</strong>
         <span>二元线性规划可视化求解器</span>
       </div>
+      <button id="sidebarToggle" class="btn btn-ghost btn-icon sidebar-toggle" aria-label="收起菜单栏" aria-expanded="true">×</button>
     </div>
 
     <section class="section">
@@ -480,6 +513,7 @@ canvas.objective-dragging { cursor: ns-resize; }
     </div>
   </main>
 </div>
+<button id="sidebarReopen" class="btn btn-ghost btn-sm sidebar-reopen" aria-label="展开菜单栏">☰ 菜单</button>
 
 <!-- GSAP 用于等值线和求解反馈的时间线动画；无网络时自动回退到原生动画。 -->
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
@@ -510,6 +544,9 @@ canvas.objective-dragging { cursor: ns-resize; }
   const solutionPoint = $('solutionPoint');
   const solutionStatus = $('solutionStatus');
   const statusIndicator = $('statusIndicator');
+  const shell = document.querySelector('.shell');
+  const sidebarToggle = $('sidebarToggle');
+  const sidebarReopen = $('sidebarReopen');
   const verticesList = $('verticesList'), verticesEmpty = $('verticesEmpty');
   const showGridCheck = $('showGridCheck'), showAxesCheck = $('showAxesCheck'), showLabelsCheck = $('showLabelsCheck'), showConstraintsCheck = $('showConstraintsCheck'), showFeasibleOnlyCheck = $('showFeasibleOnlyCheck');
   const autoSolveCheck = $('autoSolveCheck');
@@ -520,11 +557,14 @@ canvas.objective-dragging { cursor: ns-resize; }
   const palette = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#06b6d4', '#ec4899', '#84cc16', '#f97316'];
 
   let constraints = [];
+  let editingConstraintIdx = -1;
   let objective = { a: 0, b: 0 };
   let direction = 'max';
   let view = { xMin: -2, yMin: -2, scale: 60 };
   let objectiveLevel = null, animationLevel = 0, animationReq = null, animationActive = false, animationTween = null;
   let feedbackReq = null, solutionPulse = 0;
+  let regionReveal = 1, constraintReveal = 1, geometryTween = null;
+  let hoverVertex = null, hoverVertexTween = null, hoverVertexPulse = 0;
   let isDragging = false, isDraggingObjective = false, pointerId = null, lastMouse = { x: 0, y: 0 };
   let hoverIdx = -1;
   let verticesSig = '';
@@ -672,8 +712,8 @@ canvas.objective-dragging { cursor: ns-resize; }
     ctx.font = (opts.bold ? 'bold ' : '') + (opts.size || 11) + 'px ' + (opts.mono ? cssVar('--font-mono') : cssVar('--font-sans'));
     ctx.textAlign = opts.align || 'left';
     ctx.textBaseline = opts.baseline || 'alphabetic';
-    ctx.shadowColor = cssVar('--background');
-    ctx.shadowBlur = 4;
+    ctx.shadowColor = opts.shadowColor || cssVar('--background');
+    ctx.shadowBlur = opts.shadowBlur == null ? 4 : opts.shadowBlur;
     ctx.fillStyle = opts.color || cssVar('--foreground');
     ctx.fillText(text, x, y);
     ctx.restore();
@@ -700,15 +740,29 @@ canvas.objective-dragging { cursor: ns-resize; }
     ctx.restore();
   }
 
-  // 圆头圆角小圆点标记
-  function pointMarker(px, py, r) {
+  // 普通顶点：高对比度圆环 + 核心点，避免被半平面填色淹没。
+  function pointMarker(px, py, r, pulse) {
+    const radius = Math.max(2.8, r || 0);
+    const mark = cssVar('--vertex-mark');
     ctx.save();
-    ctx.beginPath(); ctx.arc(px, py, r + 2.5, 0, Math.PI * 2);
-    ctx.fillStyle = cssVar('--background');
-    ctx.globalAlpha = 0.85; ctx.fill(); ctx.globalAlpha = 1;
-    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
-    ctx.fillStyle = cssVar('--vertex-mark');
-    ctx.fill();
+    // 外圈柔和光晕
+    ctx.beginPath(); ctx.arc(px, py, radius + 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = mark; ctx.globalAlpha = 0.16; ctx.fill();
+    // 白色镂空底，确保在任意约束颜色上都有轮廓
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(px, py, radius + 2.2, 0, Math.PI * 2);
+    ctx.fillStyle = cssVar('--background'); ctx.fill();
+    // 清晰描边
+    ctx.beginPath(); ctx.arc(px, py, radius + 1.7, 0, Math.PI * 2);
+    ctx.strokeStyle = mark; ctx.lineWidth = 1.5; ctx.stroke();
+    // 中心实心点
+    ctx.beginPath(); ctx.arc(px, py, radius * 0.62, 0, Math.PI * 2);
+    ctx.fillStyle = mark; ctx.fill();
+    if (pulse > 0) {
+      ctx.globalAlpha = 0.3 + pulse * 0.35;
+      ctx.strokeStyle = mark; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(px, py, radius + 5 + pulse * 4, 0, Math.PI * 2); ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -775,15 +829,20 @@ canvas.objective-dragging { cursor: ns-resize; }
     ctx.moveTo(f.x, f.y);
     for (let i = 1; i < poly.length; i++) { const p = toScreen(poly[i].x, poly[i].y); ctx.lineTo(p.x, p.y); }
     ctx.closePath();
-    // 最终可行域使用更高对比度的填充和边缘光晕，与各半平面明显区分。
+    // 最终可行域使用渐变填充、更高对比度边缘和光晕，与各半平面明显区分。
     ctx.save();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = cssVar('--feasible-fill');
+    ctx.globalAlpha = regionReveal;
+    const gradient = ctx.createLinearGradient(0, 0, cssW(), cssH());
+    gradient.addColorStop(0, cssVar('--feasible-fill-strong'));
+    gradient.addColorStop(0.52, cssVar('--feasible-fill'));
+    gradient.addColorStop(1, cssVar('--feasible-fill-strong'));
+    ctx.fillStyle = gradient;
     ctx.shadowColor = cssVar('--feasible-stroke');
     ctx.shadowBlur = 10;
     ctx.fill();
     ctx.restore();
-    ctx.lineWidth = 2.4;
+    ctx.globalAlpha = 0.55 + regionReveal * 0.45;
+    ctx.lineWidth = 2.4 + regionReveal * 0.5;
     ctx.strokeStyle = cssVar('--feasible-stroke');
     ctx.stroke();
   }
@@ -798,7 +857,7 @@ canvas.objective-dragging { cursor: ns-resize; }
       const region = clipPolygon(viewport, c.a, c.b, c.op, c.c);
       if (region.length < 3) return;
       ctx.save();
-      ctx.globalAlpha = 0.17;
+      ctx.globalAlpha = 0.17 * regionReveal;
       ctx.fillStyle = palette[idx % palette.length];
       ctx.beginPath();
       region.forEach((p, i) => { const s = toScreen(p.x, p.y); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
@@ -821,21 +880,25 @@ canvas.objective-dragging { cursor: ns-resize; }
     ctx.strokeStyle = color;
     ctx.lineWidth = isHover ? 3 : 2;
     ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    const progress = Math.max(0, Math.min(1, constraintReveal));
+    const endX = p1.x + (p2.x - p1.x) * progress;
+    const endY = p1.y + (p2.y - p1.y) * progress;
+    ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(endX, endY); ctx.stroke();
 
     // 标签沿法向移出约束线，避免线条穿过不等式符号造成“多一个 +”的错觉。
     const lx = (p1.x + p2.x) / 2, ly = (p1.y + p2.y) / 2;
     const lineLen = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
     const nx = -(p2.y - p1.y) / lineLen, ny = (p2.x - p1.x) / lineLen;
     const tx = lx + nx * 16, ty = ly + ny * 16;
-    if (showConstraintsCheck.checked) {
+    if (showConstraintsCheck.checked && progress > 0.72) {
+      ctx.globalAlpha = Math.min(1, (progress - 0.72) / 0.28);
       haloText(renderConstraint(c), tx, ty, { color, bold: true, size: 11, mono: true, align: 'left' });
     }
     ctx.restore();
   }
 
   // 目标等值线 + 沿法向的运动箭头
-  function drawObjective() {
+  function drawObjective(sol) {
     const w = cssW(), h = cssH();
     const center = toWorld(w / 2, h / 2);
     if (Math.abs(objective.a) < 1e-9 && Math.abs(objective.b) < 1e-9) return;
@@ -850,15 +913,20 @@ canvas.objective-dragging { cursor: ns-resize; }
     const a1 = { x: base.x - perp.x * len, y: base.y - perp.y * len };
     const a2 = { x: base.x + perp.x * len, y: base.y + perp.y * len };
     const s1 = toScreen(a1.x, a1.y), s2 = toScreen(a2.x, a2.y);
-    const color = cssVar('--objective-stroke');
+    const atOptimal = isAtOptimalLevel(sol || computeSolution());
+    const effect = atOptimal ? solutionPulse : 0;
+    const color = atOptimal ? cssVar('--optimal-stroke') : cssVar('--objective-stroke');
 
     ctx.save();
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2.2;
-    ctx.setLineDash([7, 6]);
+    ctx.lineWidth = atOptimal ? 2.8 + effect * 1.2 : 2.2;
+    ctx.setLineDash(atOptimal ? [10, 6] : [7, 6]);
+    ctx.lineDashOffset = atOptimal ? -effect * 26 : 0;
     ctx.lineCap = 'round';
+    if (effect > 0) { ctx.shadowColor = color; ctx.shadowBlur = 8 + effect * 18; }
     ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); ctx.stroke();
     ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
 
     // 运动方向箭头:最大化沿梯度、最小化反向;置于线中段、法向偏移处
     const mid = { x: (s1.x + s2.x) / 2, y: (s1.y + s2.y) / 2 };
@@ -869,7 +937,20 @@ canvas.objective-dragging { cursor: ns-resize; }
     ctx.fillStyle = color;
     ctx.globalAlpha = .9;
     ctx.beginPath(); ctx.arc(mid.x, mid.y, 3.5, 0, Math.PI * 2); ctx.fill();
-    chevronAt(ax, ay, gdx, gdy, 8, color, 0.95);
+    if (effect > 0) {
+      // 到达最优点时，箭头带有连续的“推进”残影和扩散光环。
+      for (const offset of [12, 26, 40]) {
+        chevronAt(ax - gdx * offset, ay - gdy * offset, gdx, gdy, 5 + effect * 3,
+          color, 0.12 + effect * 0.16);
+      }
+      ctx.save();
+      ctx.globalAlpha = effect * 0.7;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(mid.x, mid.y, 8 + (1 - effect) * 24, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+    chevronAt(ax, ay, gdx, gdy, 8 + effect * 4, color, 0.95);
     haloText(`Z = ${fmt(level)}`, ax + gdx * 30, ay + gdy * 30 + 4,
       { color, bold: true, size: 14, mono: true, align: 'center' });
     ctx.restore();
@@ -1025,9 +1106,10 @@ canvas.objective-dragging { cursor: ns-resize; }
     for (const v of poly) {
       if (isArtificial(v)) continue;
       const p = toScreen(v.x, v.y);
-      pointMarker(p.x, p.y, 1.8);
+      const active = hoverVertex && Math.hypot(v.x - hoverVertex.x, v.y - hoverVertex.y) < 1e-6;
+      pointMarker(p.x, p.y, 2.8, active ? hoverVertexPulse : 0);
       haloText(`(${fmt(v.x)}, ${fmt(v.y)})`, p.x, p.y - 9,
-        { size: 10, mono: true, color: '#ffffff', align: 'center' });
+        { size: 10, mono: true, color: '#ffffff', shadowColor: '#111827', shadowBlur: 5, align: 'center' });
     }
   }
 
@@ -1055,7 +1137,7 @@ canvas.objective-dragging { cursor: ns-resize; }
     if (!showFeasibleOnlyCheck.checked) drawConstraintRegions();
     drawPolygon(sol.poly);
     constraints.forEach((c, i) => drawConstraint(c, i));
-    drawObjective();
+    drawObjective(sol);
 
     if (sol.status === 'ok') { drawVertices(sol.poly); if (isAtOptimalLevel(sol)) drawBest(sol); }
     else if (sol.status === 'unbounded') { drawVertices(sol.poly); drawUnboundedArrow(sol.best); }
@@ -1138,7 +1220,7 @@ canvas.objective-dragging { cursor: ns-resize; }
       const li = document.createElement('li');
       li.className = 'constraint-item';
       li.dataset.idx = idx;
-      li.innerHTML = `<span class="constraint-color" style="--c:${palette[idx % palette.length]}"></span><span class="constraint-text">${esc(renderConstraint(c))}</span><button class="btn btn-ghost constraint-del" data-idx="${idx}" aria-label="移除约束">×</button>`;
+      li.innerHTML = `<span class="constraint-color" style="--c:${palette[idx % palette.length]}"></span><span class="constraint-text">${esc(renderConstraint(c))}</span><button class="btn btn-ghost constraint-edit" data-edit="${idx}" aria-label="编辑约束">✎</button><button class="btn btn-ghost constraint-del" data-idx="${idx}" aria-label="移除约束">×</button>`;
       li.addEventListener('mouseenter', () => { hoverIdx = idx; highlightList(); draw(); });
       li.addEventListener('mouseleave', () => { hoverIdx = -1; highlightList(); draw(); });
       constraintsList.appendChild(li);
@@ -1148,19 +1230,86 @@ canvas.objective-dragging { cursor: ns-resize; }
     [...constraintsList.children].forEach(li => li.classList.toggle('active', +li.dataset.idx === hoverIdx));
   }
 
+  function revealGeometry() {
+    if (geometryTween) {
+      if (typeof geometryTween.kill === 'function') geometryTween.kill();
+      else cancelAnimationFrame(geometryTween);
+    }
+    regionReveal = 0; constraintReveal = 0;
+    if (window.gsap) {
+      const state = { value: 0 };
+      geometryTween = gsap.to(state, { value: 1, duration: 0.72, ease: 'power2.out',
+        onUpdate: () => { regionReveal = constraintReveal = state.value; draw(); },
+        onComplete: () => { regionReveal = constraintReveal = 1; geometryTween = null; draw(); } });
+      return;
+    }
+    const started = performance.now();
+    const frame = now => {
+      const t = Math.min(1, (now - started) / 720);
+      const eased = 1 - Math.pow(1 - t, 3);
+      regionReveal = constraintReveal = eased; draw();
+      if (t < 1) geometryTween = requestAnimationFrame(frame); else geometryTween = null;
+    };
+    geometryTween = requestAnimationFrame(frame);
+  }
+
+  function updateHoverVertex(vertex) {
+    const same = vertex && hoverVertex && Math.hypot(vertex.x - hoverVertex.x, vertex.y - hoverVertex.y) < 1e-6;
+    if (same) return;
+    if (hoverVertexTween) {
+      if (typeof hoverVertexTween.kill === 'function') hoverVertexTween.kill();
+      else cancelAnimationFrame(hoverVertexTween);
+      hoverVertexTween = null;
+    }
+    hoverVertex = vertex;
+    hoverVertexPulse = 0;
+    if (!vertex) { draw(); return; }
+    if (window.gsap) {
+      const state = { value: 0 };
+      hoverVertexTween = gsap.to(state, { value: 1, duration: 0.62, repeat: -1, yoyo: true, ease: 'sine.inOut',
+        onUpdate: () => { hoverVertexPulse = state.value; draw(); } });
+    } else {
+      const started = performance.now();
+      const frame = now => {
+        if (!hoverVertex) return;
+        hoverVertexPulse = (Math.sin((now - started) / 260) + 1) / 2;
+        draw(); hoverVertexTween = requestAnimationFrame(frame);
+      };
+      hoverVertexTween = requestAnimationFrame(frame);
+    }
+    draw();
+  }
+
+  function vertexAtScreen(sx, sy) {
+    const sol = computeSolution();
+    for (const v of (sol.poly || [])) {
+      if (isArtificial(v)) continue;
+      const p = toScreen(v.x, v.y);
+      if (Math.hypot(p.x - sx, p.y - sy) <= 13) return v;
+    }
+    return null;
+  }
+
   /* ---------- 求解动作 ---------- */
   function addConstraint(raw) {
     const parsed = parseConstraint(raw);
     if (!parsed) return;
-    constraints.push(parsed);
+    if (editingConstraintIdx >= 0 && editingConstraintIdx < constraints.length) constraints[editingConstraintIdx] = parsed;
+    else constraints.push(parsed);
+    editingConstraintIdx = -1;
+    addConstraintBtn.textContent = '添加约束';
     updateConstraintsList();
     constraintsInput.value = '';
+    revealGeometry();
     autoSolveCheck.checked ? startAnimation() : draw();
   }
   function removeConstraint(idx) {
     constraints.splice(idx, 1);
+    if (editingConstraintIdx === idx) { editingConstraintIdx = -1; addConstraintBtn.textContent = '添加约束'; constraintsInput.value = ''; }
+    else if (editingConstraintIdx > idx) editingConstraintIdx--;
     if (hoverIdx === idx) hoverIdx = -1;
     updateConstraintsList();
+    revealGeometry();
     autoSolveCheck.checked ? startAnimation() : draw();
   }
 
@@ -1175,18 +1324,18 @@ canvas.objective-dragging { cursor: ns-resize; }
     return direction === 'max' ? Math.min(...values) : Math.max(...values);
   }
 
-  function startAnimation() {
+  function startAnimation(force) {
     if (animationReq !== null) cancelAnimationFrame(animationReq);
     if (animationTween) { animationTween.kill(); animationTween = null; }
     animationReq = null;
     animationActive = false;
-    if (!autoSolveCheck.checked) { draw(); return; }
+    if (!force && !autoSolveCheck.checked) { draw(); return; }
     const sol = computeSolution();
     if (sol.status !== 'ok' || !sol.best) { draw(); return; }
     const target = sol.value;
     const speed = parseInt(speedRange.value, 10) / 5;
     let t = 0;
-    const s0 = animationStartLevel(sol);
+    const s0 = force && Number.isFinite(objectiveLevel) ? objectiveLevel : animationStartLevel(sol);
     objectiveLevel = s0;
     animationLevel = s0;
     animationActive = true;
@@ -1253,13 +1402,25 @@ canvas.objective-dragging { cursor: ns-resize; }
 
   /* ---------- 事件 ---------- */
   constraintsList.addEventListener('click', e => {
+    const edit = e.target.closest('button[data-edit]');
+    if (edit) {
+      editingConstraintIdx = +edit.dataset.edit;
+      constraintsInput.value = constraints[editingConstraintIdx]?.raw || renderConstraint(constraints[editingConstraintIdx]);
+      addConstraintBtn.textContent = '保存约束';
+      constraintsInput.focus();
+      return;
+    }
     const btn = e.target.closest('button[data-idx]');
     if (btn) removeConstraint(+btn.dataset.idx);
   });
   addConstraintBtn.addEventListener('click', () => addConstraint(constraintsInput.value));
   constraintsInput.addEventListener('keydown', e => { if (e.key === 'Enter') addConstraint(constraintsInput.value); });
-  clearConstraintsBtn.addEventListener('click', () => { constraints = []; hoverIdx = -1; updateConstraintsList(); draw(); });
-  solveBtn.addEventListener('click', () => { objective = parseObjective(objectiveInput.value); objectiveLevel = null; startAnimation(); });
+  clearConstraintsBtn.addEventListener('click', () => { constraints = []; hoverIdx = -1; editingConstraintIdx = -1; constraintsInput.value = ''; addConstraintBtn.textContent = '添加约束'; updateConstraintsList(); revealGeometry(); });
+  solveBtn.addEventListener('click', () => {
+    objective = parseObjective(objectiveInput.value);
+    if (objectiveLevel == null) objectiveLevel = objectiveLevelAt(cssW() / 2, cssH() / 2);
+    startAnimation(true);
+  });
   objectiveInput.addEventListener('change', () => { objective = parseObjective(objectiveInput.value); objectiveLevel = null; autoSolveCheck.checked ? startAnimation() : draw(); });
   [maxBtn, minBtn].forEach(btn => btn.addEventListener('click', () => {
     direction = btn.dataset.dir;
@@ -1292,6 +1453,17 @@ canvas.objective-dragging { cursor: ns-resize; }
     themeToggle.textContent = dark ? '切换亮色' : '切换暗色';
     draw();
   });
+  function toggleSidebar() {
+    const collapsed = shell.classList.toggle('sidebar-collapsed');
+    document.body.classList.toggle('sidebar-collapsed', collapsed);
+    sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+    sidebarToggle.setAttribute('aria-label', collapsed ? '展开菜单栏' : '收起菜单栏');
+    sidebarToggle.textContent = collapsed ? '☰' : '×';
+    sidebarReopen.setAttribute('aria-label', collapsed ? '展开菜单栏' : '收起菜单栏');
+    setTimeout(resize, 260);
+  }
+  sidebarToggle.addEventListener('click', toggleSidebar);
+  sidebarReopen.addEventListener('click', toggleSidebar);
 
   /* 拖动画布(指针事件统一鼠标/触控) */
   canvas.addEventListener('pointerdown', e => {
@@ -1311,6 +1483,7 @@ canvas.objective-dragging { cursor: ns-resize; }
       return;
     }
     isDragging = true; isDraggingObjective = false; pointerId = e.pointerId;
+    updateHoverVertex(null);
     lastMouse = { x: e.clientX, y: e.clientY };
     canvas.setPointerCapture(e.pointerId);
     canvas.classList.add('dragging');
@@ -1319,7 +1492,10 @@ canvas.objective-dragging { cursor: ns-resize; }
   canvas.addEventListener('pointermove', e => {
     if (!isDragging && !isDraggingObjective) {
       const rect = wrap.getBoundingClientRect();
-      canvas.style.cursor = objectiveLineDistance(e.clientX - rect.left, e.clientY - rect.top) <= 14 ? 'ns-resize' : 'grab';
+      const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+      const vertex = vertexAtScreen(sx, sy);
+      updateHoverVertex(vertex);
+      canvas.style.cursor = objectiveLineDistance(sx, sy) <= 14 ? 'ns-resize' : (vertex ? 'pointer' : 'grab');
       return;
     }
     if (e.pointerId !== pointerId) return;
