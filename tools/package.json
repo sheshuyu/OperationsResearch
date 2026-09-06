@@ -1,0 +1,8 @@
+{
+  "name": "lp-solver",
+  "private": true,
+  "scripts": {
+    "dev": "edgeone makers dev -n lp-solver",
+    "deploy": "edgeone makers deploy -n lp-solver --json"
+  }
+}

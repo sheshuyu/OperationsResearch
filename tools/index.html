@@ -1,0 +1,1316 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LP Solver · 二元线性规划可视化求解器</title>
+<style>
+/* ============ 设计令牌 ============ */
+:root {
+  --background: #ffffff;
+  --card: #ffffff;
+  --popover: #ffffff;
+  --muted: #f5f5f5;
+  --foreground: #18181b;
+  --card-foreground: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary-foreground: #27272a;
+  --muted-foreground: #71717a;
+  --primary: #18181b;
+  --secondary: #f4f4f5;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --input: #d4d4d8;
+  --ring: #a1a1aa;
+  --border: #e4e4e7;
+
+  --control-accent: #18181b;
+
+  /* 状态(柔和) */
+  --success: #16a34a;
+  --warning: #d97706;
+  --warning-soft: #fff7ed;
+  --destructive: #dc2626;
+  --destructive-soft: #fef2f2;
+
+  /* 几何语义色 */
+  --feasible-fill: rgba(100, 116, 139, 0.10);
+  --feasible-stroke: rgba(100, 116, 139, 0.50);
+  --objective-stroke: #7c3aed;
+  --solution-core: #0d9488;
+  --vertex-mark: #52525b;
+  --grid-line: rgba(0, 0, 0, 0.055);
+  --grid-axis: rgba(0, 0, 0, 0.16);
+
+  --sidebar: #fafafa;
+  --sidebar-foreground: #18181b;
+  --sidebar-border: #e4e4e7;
+
+  --font-sans: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: Geist Mono, ui-monospace, "SF Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+
+  --radius: 0.5rem;
+  --radius-sm: 0.375rem;
+  --spacing: 0.25rem;
+
+  --solver-sidebar: 276px;
+  --solver-header: 54px;
+}
+
+.dark {
+  --background: #09090b;
+  --card: #18181b;
+  --popover: #1f1f23;
+  --muted: #1f1f23;
+  --foreground: #fafafa;
+  --card-foreground: #fafafa;
+  --primary-foreground: #09090b;
+  --secondary-foreground: #fafafa;
+  --muted-foreground: #a1a1aa;
+  --primary: #e4e4e7;
+  --secondary: #27272a;
+  --accent: #3f3f46;
+  --accent-foreground: #fafafa;
+  --input: #3f3f46;
+  --ring: #71717a;
+  --border: #27272a;
+
+  --control-accent: #e4e4e7;
+
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --warning-soft: #241b07;
+  --destructive: #f87171;
+  --destructive-soft: #2a1215;
+
+  --feasible-fill: rgba(148, 163, 184, 0.09);
+  --feasible-stroke: rgba(148, 163, 184, 0.55);
+  --objective-stroke: #a78bfa;
+  --solution-core: #2dd4bf;
+  --vertex-mark: #a1a1aa;
+  --grid-line: rgba(255, 255, 255, 0.055);
+  --grid-axis: rgba(255, 255, 255, 0.20);
+
+  --sidebar: #0f0f12;
+  --sidebar-foreground: #fafafa;
+  --sidebar-border: #27272a;
+}
+
+/* ============ 基础 ============ */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+button, input { font: inherit; letter-spacing: inherit; }
+button { cursor: pointer; border: 0; background: none; color: inherit; }
+::selection { background: color-mix(in srgb, var(--control-accent) 30%, transparent); }
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--solver-sidebar) 1fr;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--background);
+}
+
+/* ============ 侧栏 ============ */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 3);
+  padding: calc(var(--spacing) * 3);
+  background: var(--sidebar);
+  color: var(--sidebar-foreground);
+  border-right: 1px solid var(--sidebar-border);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.brand { display: flex; align-items: center; gap: 10px; padding: 8px 10px 4px; }
+.brand-mark {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+}
+.brand-mark svg { width: 16px; height: 16px; }
+.brand-copy { line-height: 1.2; }
+.brand-copy strong { display: block; font-size: 14px; font-weight: 650; letter-spacing: -0.01em; }
+.brand-copy span { font-size: 11px; color: var(--muted-foreground); }
+
+.section {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.section-title {
+  margin: 0;
+  font: 600 10px/1 var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.row-between { justify-content: space-between; }
+.stack { display: flex; flex-direction: column; gap: 8px; }
+
+.input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
+  background: var(--background);
+  color: var(--foreground);
+  outline: none;
+  font-size: 13px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.input:focus { border-color: var(--control-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--control-accent) 18%, transparent); }
+.input::placeholder { color: var(--muted-foreground); opacity: .7; }
+.input-mono { font-family: var(--font-mono); font-size: 12px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 32px; padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: 500 13px/1 var(--font-sans);
+  white-space: nowrap;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+}
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--control-accent) 30%, transparent); }
+.btn-primary { background: var(--primary); color: var(--primary-foreground); }
+.btn-primary:hover { opacity: .88; }
+.btn-secondary { background: var(--secondary); color: var(--secondary-foreground); border-color: var(--border); }
+.btn-secondary:hover { background: var(--accent); }
+.btn-ghost { background: transparent; color: var(--foreground); border-color: var(--border); }
+.btn-ghost:hover { background: var(--accent); color: var(--accent-foreground); }
+.btn-sm { min-height: 28px; padding: 0 10px; font-size: 12px; }
+.btn-icon { width: 30px; height: 30px; padding: 0; border-radius: var(--radius); display: grid; place-items: center; font-size: 15px; }
+
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); background: var(--secondary); padding: 2px; }
+.seg-btn {
+  padding: 5px 12px; border-radius: calc(var(--radius) - 3px);
+  font-size: 12px; font-weight: 500;
+  color: var(--muted-foreground);
+  transition: background .15s ease, color .15s ease;
+}
+.seg-btn.active { background: var(--primary); color: var(--primary-foreground); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+.constraints, .vertices { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.constraint-item {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  border: 1px solid var(--border);
+  transition: border-color .12s ease, background-color .12s ease, opacity .12s ease;
+}
+.constraint-text, .vertex-coord { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.constraint-color { width: 9px; height: 9px; border-radius: 3px; background: var(--c); flex-shrink: 0; }
+.constraint-del { color: var(--muted-foreground); width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; font-size: 14px; line-height: 1; }
+.constraint-del:hover { color: var(--destructive); background: var(--destructive-soft); }
+.constraint-item.active { border-color: var(--ring); background: var(--muted); }
+
+.vertex-item {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+.vertex-index { font-family: var(--font-mono); font-size: 10px; color: var(--muted-foreground); width: 16px; text-align: right; }
+.vertex-value { font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); }
+.vertex-item.best {
+  border-color: color-mix(in srgb, var(--solution-core) 55%, var(--border));
+  background: color-mix(in srgb, var(--solution-core) 9%, var(--card));
+}
+.vertex-item.best .vertex-value { color: var(--solution-core); font-weight: 600; }
+
+.empty-state {
+  padding: 14px 8px; text-align: center;
+  color: var(--muted-foreground); font-size: 12px; line-height: 1.5;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border);
+}
+
+.hint { font-size: 12px; color: var(--muted-foreground); line-height: 1.5; }
+.hint code { font-family: var(--font-mono); font-size: 11px; background: var(--muted); padding: 1px 5px; border-radius: 4px; border: 1px solid var(--border); }
+
+.checkbox-wrap { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--foreground); user-select: none; }
+.checkbox-wrap input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none;
+  width: 16px; height: 16px; flex-shrink: 0;
+  margin: 0;
+  border: 1px solid var(--input);
+  border-radius: 4px;
+  background: var(--background);
+  cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease;
+  background-repeat: no-repeat; background-position: center; background-size: 11px;
+}
+.checkbox-wrap input[type="checkbox"]:hover { border-color: var(--ring); }
+.checkbox-wrap input[type="checkbox"]:checked {
+  background-color: var(--control-accent);
+  border-color: var(--control-accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6 9.5 3.4' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.dark .checkbox-wrap input[type="checkbox"]:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6 9.5 3.4' fill='none' stroke='%2309090b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.checkbox-wrap input[type="checkbox"]:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--control-accent) 30%, transparent); }
+
+.slider-wrap { display: flex; align-items: center; gap: 10px; }
+.slider-wrap .hint { flex: none; width: 28px; }
+input[type="range"] { flex: 1; accent-color: var(--control-accent); height: 18px; margin: 0; cursor: pointer; }
+
+/* ============ 主区 ============ */
+.main { position: relative; display: flex; flex-direction: column; background: var(--background); overflow: hidden; }
+
+.topbar {
+  height: var(--solver-header); flex: none;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+  backdrop-filter: blur(8px);
+}
+.topbar-title { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+.canvas-wrap { flex: 1; position: relative; overflow: hidden; background: var(--background); }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+canvas.dragging { cursor: grabbing; }
+canvas.objective-dragging { cursor: ns-resize; }
+
+.floating-bar {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 4px;
+  padding: 5px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0,0,0,.08);
+  z-index: 10;
+}
+.floating-bar .hint { padding: 0 6px; font-size: 11px; min-width: 40px; text-align: center; }
+
+.solution-card {
+  position: absolute; bottom: 14px; right: 14px;
+  min-width: 230px; max-width: 280px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 24px rgba(0,0,0,.10);
+  backdrop-filter: blur(10px);
+  z-index: 10;
+}
+.solution-card.solution-pop { animation: solutionPop .65s cubic-bezier(.2,.8,.2,1); }
+@keyframes solutionPop { 0% { transform: scale(.98); } 45% { transform: scale(1.035); } 100% { transform: scale(1); } }
+.solution-title { margin: 0 0 6px; font: 600 10px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted-foreground); }
+.solution-value { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.solution-point { font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.solution-status {
+  display: none; align-items: center; gap: 7px;
+  margin-top: 10px; padding: 6px 9px;
+  font-size: 12px; line-height: 1.4;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.solution-status.show { display: flex; }
+.solution-status .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: currentColor; }
+.solution-status.warn { background: var(--warning-soft); border-color: color-mix(in srgb, var(--warning) 35%, transparent); color: var(--warning); }
+.solution-status.err { background: var(--destructive-soft); border-color: color-mix(in srgb, var(--destructive) 35%, transparent); color: var(--destructive); }
+
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted-foreground); flex-shrink: 0; }
+.status-dot.ok { background: var(--success); }
+.status-dot.warn { background: var(--warning); }
+.status-dot.err { background: var(--destructive); }
+
+@media (max-width: 880px) {
+  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .sidebar { max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--sidebar-border); }
+  .solution-card { left: 12px; right: 12px; min-width: 0; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 18V6M5 18h14"/><path d="m8 14 3-3 3 2 4-5"/><circle cx="8" cy="14" r="1" fill="currentColor" stroke="none"/><circle cx="11" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="14" cy="13" r="1" fill="currentColor" stroke="none"/><circle cx="18" cy="8" r="1" fill="currentColor" stroke="none"/></svg></div>
+      <div class="brand-copy">
+        <strong>LP Solver</strong>
+        <span>二元线性规划可视化求解器</span>
+      </div>
+    </div>
+
+    <section class="section">
+      <h2 class="section-title">约束条件</h2>
+      <div class="stack">
+        <input id="constraintInput" class="input input-mono" type="text" placeholder="例如：2x1 + 3x2 &lt;= 15" aria-label="约束输入" spellcheck="false">
+        <div class="row">
+          <button id="addConstraintBtn" class="btn btn-primary btn-sm">添加约束</button>
+          <button id="clearConstraintsBtn" class="btn btn-ghost btn-sm">清空</button>
+        </div>
+      </div>
+      <p class="hint">支持 <code>&lt;=</code> <code>&gt;=</code> <code>=</code> 与 <code>x1/x2</code>，常数可写在两边。</p>
+      <ul id="constraintsList" class="constraints"></ul>
+      <div id="constraintsEmpty" class="empty-state">暂无约束，请在上方添加。</div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">目标函数</h2>
+      <div class="stack">
+        <input id="objectiveInput" class="input input-mono" type="text" placeholder="例如：4x1 + 3x2" value="4x1 + 3x2" aria-label="目标函数" spellcheck="false">
+        <div class="row row-between">
+          <div class="seg" role="group" aria-label="优化方向">
+            <button id="maxBtn" class="seg-btn active" data-dir="max">最大化</button>
+            <button id="minBtn" class="seg-btn" data-dir="min">最小化</button>
+          </div>
+          <button id="solveBtn" class="btn btn-primary btn-sm">求解</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">可行域顶点</h2>
+      <ul id="verticesList" class="vertices"></ul>
+      <div id="verticesEmpty" class="empty-state">求解后在此列出可行域所有顶点。</div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">求解选项</h2>
+      <div class="stack">
+        <label class="checkbox-wrap"><input id="autoSolveCheck" type="checkbox" checked><span>自动求解</span></label>
+        <label class="checkbox-wrap"><input id="animateCheck" type="checkbox" checked><span>动画演示等值线</span></label>
+        <label class="checkbox-wrap"><input id="snapObjectiveCheck" type="checkbox" checked><span>等值线自动吸附顶点</span></label>
+        <div class="slider-wrap">
+          <span class="hint">速度</span>
+          <input id="speedRange" type="range" min="1" max="10" value="5">
+        </div>
+        <div class="row">
+          <button id="resetViewBtn" class="btn btn-secondary btn-sm">重置视图</button>
+          <button id="exportBtn" class="btn btn-secondary btn-sm">导出 PNG</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">视图设置</h2>
+      <div class="stack">
+        <label class="checkbox-wrap"><input id="showGridCheck" type="checkbox" checked><span>显示网格</span></label>
+        <label class="checkbox-wrap"><input id="showAxesCheck" type="checkbox" checked><span>显示坐标轴</span></label>
+        <label class="checkbox-wrap"><input id="showLabelsCheck" type="checkbox" checked><span>标注顶点坐标</span></label>
+        <label class="checkbox-wrap"><input id="showConstraintsCheck" type="checkbox" checked><span>显示约束文字</span></label>
+        <div class="slider-wrap">
+          <span class="hint">缩放</span>
+          <input id="zoomRange" type="range" min="20" max="160" value="60">
+        </div>
+      </div>
+    </section>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <h1 class="topbar-title">几何可视化</h1>
+      <div class="topbar-actions">
+        <span id="statusIndicator" class="status-dot ok" aria-label="就绪"></span>
+        <button id="themeToggle" class="btn btn-ghost btn-sm">切换亮色</button>
+      </div>
+    </header>
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="lpCanvas"></canvas>
+      <div class="floating-bar">
+        <button id="zoomOutBtn" class="btn btn-ghost btn-icon" aria-label="缩小">−</button>
+        <span id="zoomLabel" class="hint">100%</span>
+        <button id="zoomInBtn" class="btn btn-ghost btn-icon" aria-label="放大">+</button>
+        <button id="fitBtn" class="btn btn-ghost btn-sm">适配</button>
+      </div>
+      <div id="solutionCard" class="solution-card" hidden>
+        <div class="solution-title" id="solutionTitle">最优解</div>
+        <div id="solutionValue" class="solution-value">—</div>
+        <div id="solutionPoint" class="solution-point">—</div>
+        <div id="solutionStatus" class="solution-status"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- GSAP 用于等值线和求解反馈的时间线动画；无网络时自动回退到原生动画。 -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script>
+(function(){
+  const canvas = document.getElementById('lpCanvas');
+  const ctx = canvas.getContext('2d');
+  const wrap = document.getElementById('canvasWrap');
+
+  const $ = id => document.getElementById(id);
+  const constraintsInput = $('constraintInput');
+  const constraintsList = $('constraintsList');
+  const constraintsEmpty = $('constraintsEmpty');
+  const objectiveInput = $('objectiveInput');
+  const maxBtn = $('maxBtn'), minBtn = $('minBtn');
+  const solveBtn = $('solveBtn');
+  const addConstraintBtn = $('addConstraintBtn');
+  const clearConstraintsBtn = $('clearConstraintsBtn');
+  const resetViewBtn = $('resetViewBtn');
+  const exportBtn = $('exportBtn');
+  const themeToggle = $('themeToggle');
+  const fitBtn = $('fitBtn');
+  const zoomInBtn = $('zoomInBtn'), zoomOutBtn = $('zoomOutBtn');
+  const zoomRange = $('zoomRange'), zoomLabel = $('zoomLabel');
+  const solutionCard = $('solutionCard');
+  const solutionTitle = $('solutionTitle');
+  const solutionValue = $('solutionValue');
+  const solutionPoint = $('solutionPoint');
+  const solutionStatus = $('solutionStatus');
+  const statusIndicator = $('statusIndicator');
+  const verticesList = $('verticesList'), verticesEmpty = $('verticesEmpty');
+  const showGridCheck = $('showGridCheck'), showAxesCheck = $('showAxesCheck'), showLabelsCheck = $('showLabelsCheck'), showConstraintsCheck = $('showConstraintsCheck');
+  const autoSolveCheck = $('autoSolveCheck'), animateCheck = $('animateCheck');
+  const snapObjectiveCheck = $('snapObjectiveCheck');
+  const speedRange = $('speedRange');
+
+  /* 约束的类别色:色相拉开、明暗两主题下都清晰可辨 */
+  const palette = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#06b6d4', '#ec4899', '#84cc16', '#f97316'];
+
+  let constraints = [];
+  let objective = { a: 4, b: 3 };
+  let direction = 'max';
+  let view = { xMin: -2, yMin: -2, scale: 60 };
+  let objectiveLevel = null, animationLevel = 0, animationReq = null, animationActive = false, animationTween = null;
+  let feedbackReq = null, solutionPulse = 0;
+  let isDragging = false, isDraggingObjective = false, pointerId = null, lastMouse = { x: 0, y: 0 };
+  let hoverIdx = -1;
+  let verticesSig = '';
+  const ART = 400; // 超出此范围视为裁剪框的人为顶点
+
+  const sampleConstraints = [
+    { raw: '2x1 + 3x2 <= 15', a: 2, b: 3, op: '<=', c: 15 },
+    { raw: 'x1 + x2 <= 7', a: 1, b: 1, op: '<=', c: 7 },
+    { raw: 'x1 <= 5', a: 1, b: 0, op: '<=', c: 5 },
+    { raw: 'x2 <= 4', a: 0, b: 1, op: '<=', c: 4 },
+    { raw: 'x1 >= 0', a: 1, b: 0, op: '>=', c: 0 },
+    { raw: 'x2 >= 0', a: 0, b: 1, op: '>=', c: 0 }
+  ];
+
+  /* ---------- 解析 ---------- */
+  function parseTerms(str) {
+    const s = String(str || '').replace(/\s+/g, '').replace(/[−–]/g, '-').replace(/\*/g, '').toLowerCase();
+    let a = 0, b = 0, c = 0;
+    const tokens = s.match(/[+-]?[^+-]+/g) || [];
+    for (const token of tokens) {
+      const sign = token[0] === '-' ? -1 : 1;
+      const body = token[0] === '+' || token[0] === '-' ? token.slice(1) : token;
+      const vm = body.match(/^(.*?)(x1|x2)$/);
+      if (vm) {
+        const coef = vm[1] === '' ? 1 : parseFloat(vm[1]);
+        if (!Number.isFinite(coef)) continue;
+        if (vm[2] === 'x1') a += sign * coef; else b += sign * coef;
+      } else {
+        const value = parseFloat(body);
+        if (Number.isFinite(value)) c += sign * value;
+      }
+    }
+    return { a, b, c };
+  }
+  function parseConstraint(raw) {
+    const str = raw.replace(/\s+/g, '').replace(/[−–]/g, '-');
+    let op = '', idx = -1;
+    for (const o of ['<=', '>=', '=']) { const i = str.indexOf(o); if (i >= 0) { op = o; idx = i; break; } }
+    if (!op) return null;
+    const l = parseTerms(str.slice(0, idx));
+    const r = parseTerms(str.slice(idx + op.length));
+    return { raw, a: l.a - r.a, b: l.b - r.b, op, c: r.c - l.c };
+  }
+  function parseObjective(raw) { const t = parseTerms(raw); return { a: t.a, b: t.b }; }
+  function renderConstraint(c) {
+    const terms = [];
+    if (Math.abs(c.a) > 1e-9) terms.push(`${fmt(c.a)}x1`);
+    if (Math.abs(c.b) > 1e-9) terms.push(`${fmt(c.b)}x2`);
+    return `${(terms.length ? terms.join(' + ').replace(/\+ -/g, '- ') : '0')} ${c.op} ${fmt(c.c)}`;
+  }
+  function fmt(n) { if (Math.abs(n) < 1e-9) n = 0; return Number.isInteger(n) ? n.toString() : (+n.toFixed(3)).toString(); }
+  function esc(s) { return s.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
+
+  /* ---------- 视图 ---------- */
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const rect = wrap.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+  function cssW() { return canvas.width / (window.devicePixelRatio || 1); }
+  function cssH() { return canvas.height / (window.devicePixelRatio || 1); }
+  function toScreen(x, y) { return { x: (x - view.xMin) * view.scale, y: cssH() - (y - view.yMin) * view.scale }; }
+  function toWorld(sx, sy) { return { x: view.xMin + sx / view.scale, y: view.yMin + (cssH() - sy) / view.scale }; }
+  function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  /* ---------- 几何 ---------- */
+  function lineWorldPts(a, b, c) {
+    const w = cssW(), h = cssH();
+    const corners = [toWorld(0, 0), toWorld(w, 0), toWorld(w, h), toWorld(0, h)];
+    const xmin = Math.min(...corners.map(p => p.x)) - 2, xmax = Math.max(...corners.map(p => p.x)) + 2;
+    const ymin = Math.min(...corners.map(p => p.y)) - 2, ymax = Math.max(...corners.map(p => p.y)) + 2;
+    if (Math.abs(b) > 1e-9) return [{ x: xmin, y: (c - a * xmin) / b }, { x: xmax, y: (c - a * xmax) / b }];
+    if (Math.abs(a) > 1e-9) return [{ x: c / a, y: ymin }, { x: c / a, y: ymax }];
+    return [];
+  }
+  function computeFeasiblePolygon() {
+    if (!constraints.length) return [];
+    const bounds = [{ x: -1000, y: -1000 }, { x: 1000, y: -1000 }, { x: 1000, y: 1000 }, { x: -1000, y: 1000 }];
+    let poly = bounds;
+    for (const c of constraints) {
+      poly = clipPolygon(poly, c.a, c.b, c.op, c.c);
+      if (poly.length < 3) return [];
+    }
+    return poly;
+  }
+  function clipPolygon(poly, a, b, op, c) {
+    const out = [], n = poly.length;
+    for (let i = 0; i < n; i++) {
+      const p = poly[i], q = poly[(i + 1) % n];
+      const vp = a * p.x + b * p.y, vq = a * q.x + b * q.y;
+      const ins = (v, tol) => op === '<=' ? v <= c + tol : (op === '>=' ? v >= c - tol : Math.abs(v - c) <= tol);
+      const ip = ins(vp, 1e-9), iq = ins(vq, 1e-9);
+      if (ip && iq) out.push(q);
+      else if (ip && !iq) out.push(intersect(p, q, a, b, c));
+      else if (!ip && iq) { out.push(intersect(p, q, a, b, c)); out.push(q); }
+    }
+    return out;
+  }
+  function intersect(p, q, a, b, c) {
+    const den = a * (q.x - p.x) + b * (q.y - p.y);
+    if (Math.abs(den) < 1e-12) return p;
+    const t = (c - a * p.x - b * p.y) / den;
+    return { x: p.x + t * (q.x - p.x), y: p.y + t * (q.y - p.y) };
+  }
+  function satisfies(point) {
+    for (const c of constraints) {
+      const v = c.a * point.x + c.b * point.y;
+      if (c.op === '<=' && v > c.c + 1e-6) return false;
+      if (c.op === '>=' && v < c.c - 1e-6) return false;
+      if (c.op === '=' && Math.abs(v - c.c) > 1e-6) return false;
+    }
+    return true;
+  }
+  function detectUnbounded(best) {
+    if (!best) return false;
+    const gx = (direction === 'max' ? 1 : -1) * objective.a;
+    const gy = (direction === 'max' ? 1 : -1) * objective.b;
+    if (Math.hypot(gx, gy) < 1e-9) return false;
+    return satisfies({ x: best.x + gx, y: best.y + gy });
+  }
+  function computeSolution() {
+    const poly = computeFeasiblePolygon();
+    if (poly.length < 3) return { status: constraints.length === 0 ? 'empty' : 'infeasible', poly, best: null, value: null };
+    let best = null, bestVal = direction === 'max' ? -Infinity : Infinity;
+    for (const p of poly) {
+      const val = objective.a * p.x + objective.b * p.y;
+      if (direction === 'max' ? val > bestVal : val < bestVal) { bestVal = val; best = p; }
+    }
+    if (detectUnbounded(best)) return { status: 'unbounded', poly, best, value: bestVal };
+    return { status: 'ok', poly, best, value: bestVal };
+  }
+  function isArtificial(p) { return Math.abs(p.x) > ART || Math.abs(p.y) > ART; }
+
+  /* ---------- 绘制辅助 ---------- */
+  // 带"光晕"的文本:在任意线条上都能看清
+  function haloText(text, x, y, opts) {
+    opts = opts || {};
+    ctx.save();
+    ctx.font = (opts.bold ? 'bold ' : '') + (opts.size || 11) + 'px ' + (opts.mono ? cssVar('--font-mono') : cssVar('--font-sans'));
+    ctx.textAlign = opts.align || 'left';
+    ctx.textBaseline = opts.baseline || 'alphabetic';
+    ctx.shadowColor = cssVar('--background');
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = opts.color || cssVar('--foreground');
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  // 细线条箭头(两段式 chevron),圆头圆角,不占空间
+  function chevronAt(x, y, dx, dy, size, color, alpha) {
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    const px = -uy, py = ux;
+    const tipX = x + ux * size, tipY = y + uy * size;
+    const bX = x - ux * size * 0.35, bY = y - uy * size * 0.35;
+    const wing = size * 0.9;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha == null ? 0.9 : alpha;
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(bX + px * wing, bY + py * wing);
+    ctx.lineTo(tipX, tipY);
+    ctx.lineTo(bX - px * wing, bY - py * wing);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 圆头圆角小圆点标记
+  function pointMarker(px, py, r) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(px, py, r + 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = cssVar('--background');
+    ctx.globalAlpha = 0.85; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fillStyle = cssVar('--vertex-mark');
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /* ---------- 绘制 ---------- */
+  function drawGrid() {
+    const h = cssH(), w = cssW();
+    // 使用 1/2/5 主刻度，只给主刻度标注，避免缩放后坐标轴铺满小数。
+    const raw = 72 / view.scale;
+    const power = Math.pow(10, Math.floor(Math.log10(raw)));
+    const unit = raw / power;
+    const step = (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10) * power;
+    const subStep = step / 5;
+
+    if (subStep * view.scale >= 14) {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = cssVar('--grid-line');
+      ctx.beginPath();
+      for (let x = Math.floor(view.xMin / subStep) * subStep; x <= view.xMin + w / view.scale + subStep; x += subStep) {
+        const sx = toScreen(x, 0).x; ctx.moveTo(sx, 0); ctx.lineTo(sx, h);
+      }
+      for (let y = Math.floor(view.yMin / subStep) * subStep; y <= view.yMin + h / view.scale + subStep; y += subStep) {
+        const sy = toScreen(0, y).y; ctx.moveTo(0, sy); ctx.lineTo(w, sy);
+      }
+      ctx.stroke();
+    }
+
+    const ox = toScreen(0, 0).x, oy = toScreen(0, 0).y;
+    if (showAxesCheck.checked) {
+      ctx.strokeStyle = cssVar('--grid-axis');
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(ox, 0); ctx.lineTo(ox, h);
+      ctx.moveTo(0, oy); ctx.lineTo(w, oy);
+      ctx.stroke();
+    }
+
+    if (showLabelsCheck.checked && showAxesCheck.checked) {
+      ctx.textAlign = 'center';
+      for (let x = Math.floor(view.xMin / step) * step; x <= view.xMin + w / view.scale + step; x += step) {
+        if (Math.abs(x) < 1e-6) continue;
+        const p = toScreen(x, 0);
+        if (p.x > 24 && p.x < w - 20) haloText(fmtTick(x), p.x, oy + 15, { color: cssVar('--muted-foreground'), align: 'center' });
+      }
+      ctx.textAlign = 'left';
+      for (let y = Math.floor(view.yMin / step) * step; y <= view.yMin + h / view.scale + step; y += step) {
+        if (Math.abs(y) < 1e-6) continue;
+        const p = toScreen(0, y);
+        if (p.y > 14 && p.y < h - 10) haloText(fmtTick(y), ox + 7, p.y + 3, { color: cssVar('--muted-foreground'), align: 'left' });
+      }
+    }
+  }
+
+  function fmtTick(n) {
+    if (Math.abs(n) < 1e-9) return '0';
+    const abs = Math.abs(n);
+    const digits = abs >= 1 ? 0 : abs >= 0.1 ? 1 : 2;
+    return n.toFixed(digits).replace(/\.0+$/, '');
+  }
+
+  function drawPolygon(poly) {
+    if (poly.length < 3) return;
+    ctx.beginPath();
+    const f = toScreen(poly[0].x, poly[0].y);
+    ctx.moveTo(f.x, f.y);
+    for (let i = 1; i < poly.length; i++) { const p = toScreen(poly[i].x, poly[i].y); ctx.lineTo(p.x, p.y); }
+    ctx.closePath();
+    ctx.save();
+    ctx.globalAlpha = 0.72;
+    ctx.fillStyle = cssVar('--feasible-fill');
+    ctx.fill();
+    ctx.restore();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = cssVar('--feasible-stroke');
+    ctx.stroke();
+  }
+
+  // 每条约束对应的整个可行半平面。多个半平面重叠后，中间的交集就是最终可行域。
+  function drawConstraintRegions() {
+    if (!constraints.length) return;
+    const w = cssW(), h = cssH();
+    const viewport = [toWorld(0, h), toWorld(w, h), toWorld(w, 0), toWorld(0, 0)];
+    constraints.forEach((c, idx) => {
+      if (c.op === '=') return;
+      const region = clipPolygon(viewport, c.a, c.b, c.op, c.c);
+      if (region.length < 3) return;
+      ctx.save();
+      ctx.globalAlpha = 0.17;
+      ctx.fillStyle = palette[idx % palette.length];
+      ctx.beginPath();
+      region.forEach((p, i) => { const s = toScreen(p.x, p.y); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  // 画一条约束:直线 + 指向可行一侧的小箭头 + 标签
+  function drawConstraint(c, idx) {
+    const pts = lineWorldPts(c.a, c.b, c.c);
+    if (pts.length < 2) return;
+    const p1 = toScreen(pts[0].x, pts[0].y), p2 = toScreen(pts[1].x, pts[1].y);
+    const color = palette[idx % palette.length];
+    const isHover = idx === hoverIdx;
+    const dim = hoverIdx >= 0 && !isHover;
+
+    ctx.save();
+    ctx.globalAlpha = dim ? 0.2 : 1;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = isHover ? 3 : 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+
+    // 标签:放在线段靠 p2 一端的上方
+    const lx = (p1.x + p2.x) / 2, ly = (p1.y + p2.y) / 2;
+    const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    const tx = lx + Math.cos(ang) * 18, ty = ly + Math.sin(ang) * 18;
+    if (showConstraintsCheck.checked) {
+      haloText(renderConstraint(c), tx, ty - 6, { color, bold: true, size: 11, mono: true, align: 'left' });
+    }
+    ctx.restore();
+  }
+
+  // 指向可行半平面的小箭头(垂直于直线,朝可行侧)
+  function drawFeasibleArrows(c, idx) {
+    const pts = lineWorldPts(c.a, c.b, c.c);
+    if (pts.length < 2) return;
+    const p1 = toScreen(pts[0].x, pts[0].y), p2 = toScreen(pts[1].x, pts[1].y);
+    if (c.op === '=') return;
+    // 可行侧单位方向(世界坐标)
+    const g = Math.hypot(c.a, c.b) || 1;
+    const dir = c.op === '<=' ? { x: -c.a / g, y: -c.b / g } : { x: c.a / g, y: c.b / g };
+    const color = palette[idx % palette.length];
+    const dim = hoverIdx >= 0 && idx !== hoverIdx;
+    const ptsPx = [p1, p2];
+    // 两个采样点画小箭头,稀疏且克制
+    for (const t of [0.18, 0.5, 0.82]) {
+      const sx = ptsPx[0].x + (ptsPx[1].x - ptsPx[0].x) * t;
+      const sy = ptsPx[0].y + (ptsPx[1].y - ptsPx[0].y) * t;
+      const ox = sx + dir.x * 16, oy = sy - dir.y * 16;   // 屏幕 y 反向
+      chevronAt(ox, oy, dir.x, -dir.y, 6, color, dim ? 0.15 : 0.65);
+    }
+  }
+
+  // 目标等值线 + 沿法向的运动箭头
+  function drawObjective() {
+    const w = cssW(), h = cssH();
+    const center = toWorld(w / 2, h / 2);
+    if (Math.abs(objective.a) < 1e-9 && Math.abs(objective.b) < 1e-9) return;
+    const norm = Math.hypot(objective.a, objective.b);
+    const nx = objective.a / norm, ny = objective.b / norm;   // 法向(梯度)
+    const perp = { x: -ny, y: nx };
+    const len = Math.max(w, h) * 3 / view.scale;
+    if (objectiveLevel == null) objectiveLevel = objective.a * center.x + objective.b * center.y;
+    const level = animationActive ? animationLevel : objectiveLevel;
+    // 由真实目标值 Z 计算直线 a*x+b*y=Z 上离原点最近的点，平移视角不会改变它。
+    const base = { x: nx * level / norm, y: ny * level / norm };
+    const a1 = { x: base.x - perp.x * len, y: base.y - perp.y * len };
+    const a2 = { x: base.x + perp.x * len, y: base.y + perp.y * len };
+    const s1 = toScreen(a1.x, a1.y), s2 = toScreen(a2.x, a2.y);
+    const color = cssVar('--objective-stroke');
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.2;
+    ctx.setLineDash([7, 6]);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 运动方向箭头:最大化沿梯度、最小化反向;置于线中段、法向偏移处
+    const mid = { x: (s1.x + s2.x) / 2, y: (s1.y + s2.y) / 2 };
+    const sign = direction === 'max' ? 1 : -1;
+    const gdx = sign * nx, gdy = -sign * ny;   // 屏幕坐标
+    const ax = mid.x + gdx * 14, ay = mid.y + gdy * 14;
+    ctx.fillStyle = color;
+    ctx.globalAlpha = .9;
+    ctx.beginPath(); ctx.arc(mid.x, mid.y, 3.5, 0, Math.PI * 2); ctx.fill();
+    chevronAt(ax, ay, gdx, gdy, 8, color, 0.95);
+    haloText(`Z = ${fmt(level)}`, ax + gdx * 18, ay + gdy * 18 + 4,
+      { color, bold: true, size: 14, mono: true, align: 'center' });
+    ctx.restore();
+  }
+
+  function objectiveLevelAt(sx, sy) {
+    const p = toWorld(sx, sy);
+    return objective.a * p.x + objective.b * p.y;
+  }
+
+  function objectiveLineDistance(sx, sy) {
+    const norm = Math.hypot(objective.a, objective.b);
+    if (norm < 1e-9) return Infinity;
+    if (objectiveLevel == null) {
+      const center = toWorld(cssW() / 2, cssH() / 2);
+      objectiveLevel = objective.a * center.x + objective.b * center.y;
+    }
+    const level = animationActive ? animationLevel : objectiveLevel;
+    return Math.abs(objectiveLevelAt(sx, sy) - level) / norm * view.scale;
+  }
+
+  function snapObjectiveLevel(level) {
+    if (!snapObjectiveCheck.checked) return level;
+    const sol = computeSolution();
+    const vertices = sol.poly || [];
+    const norm = Math.hypot(objective.a, objective.b) || 1;
+    let snapped = level, bestDistance = Infinity;
+    for (const v of vertices) {
+      if (isArtificial(v)) continue;
+      const candidate = objective.a * v.x + objective.b * v.y;
+      const distance = Math.abs(candidate - level) / norm * view.scale;
+      if (distance < 18 && distance < bestDistance) { bestDistance = distance; snapped = candidate; }
+    }
+    return snapped;
+  }
+
+  function drawUnboundedArrow(best) {
+    if (!best) return;
+    const gx = (direction === 'max' ? 1 : -1) * objective.a;
+    const gy = (direction === 'max' ? 1 : -1) * objective.b;
+    const norm = Math.hypot(gx, gy) || 1;
+    const p = toScreen(best.x, best.y);
+    const d = { x: gx / norm, y: -gy / norm };
+    const len = Math.max(cssW(), cssH()) * 0.3;
+    const end = { x: p.x + d.x * len, y: p.y + d.y * len };
+    const color = cssVar('--objective-stroke');
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.setLineDash([4, 7]);
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(end.x, end.y); ctx.stroke();
+    ctx.setLineDash([]);
+    chevronAt(end.x, end.y, d.x, d.y, 9, color, 0.95);
+    ctx.restore();
+  }
+
+  // 最优解:到两轴的辅助虚线 + 层叠圆点标记
+  function drawBest(sol) {
+    if (!sol || !sol.best) return;
+    const core = cssVar('--solution-core');
+    const p = toScreen(sol.best.x, sol.best.y);
+    const axY = toScreen(sol.best.x, 0), axX = toScreen(0, sol.best.y);
+
+    ctx.save();
+    ctx.strokeStyle = core;
+    ctx.globalAlpha = 0.4;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 5]);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y); ctx.lineTo(axY.x, axY.y);   // 竖直引线到 x 轴
+    ctx.moveTo(p.x, p.y); ctx.lineTo(axX.x, axX.y);   // 水平引线到 y 轴
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+
+    // 外圈光晕 + 实心核心 + 白描边
+    ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
+    ctx.fillStyle = core; ctx.globalAlpha = 0.18; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 6.5, 0, Math.PI * 2);
+    ctx.fillStyle = cssVar('--background'); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = core; ctx.fill();
+    if (solutionPulse > 0) {
+      ctx.save();
+      ctx.globalAlpha = solutionPulse * .65;
+      ctx.strokeStyle = core;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 9 + (1 - solutionPulse) * 22, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+
+    if (showLabelsCheck.checked) {
+      haloText(`(${fmt(sol.best.x)}, ${fmt(sol.best.y)})`, p.x + 14, p.y - 12,
+        { bold: true, size: 12, mono: true, color: cssVar('--foreground'), align: 'left' });
+    }
+    ctx.restore();
+  }
+
+  function triggerSolutionFeedback() {
+    if (window.gsap) {
+      gsap.killTweensOf(solutionCard);
+      gsap.timeline()
+        .set(solutionCard, { scale: 0.98 })
+        .to(solutionCard, { scale: 1.045, duration: 0.22, ease: 'power2.out' })
+        .to(solutionCard, { scale: 1, duration: 0.48, ease: 'elastic.out(1, 0.55)' });
+      if (feedbackReq) cancelAnimationFrame(feedbackReq);
+      solutionPulse = 1;
+      gsap.to({ value: 1 }, { value: 0, duration: 0.72, ease: 'power2.out', onUpdate: function(){ solutionPulse = this.targets()[0].value; draw(); }, onComplete: function(){ solutionPulse = 0; draw(); } });
+      return;
+    }
+    if (feedbackReq) cancelAnimationFrame(feedbackReq);
+    solutionPulse = 1;
+    solutionCard.classList.remove('solution-pop');
+    void solutionCard.offsetWidth;
+    solutionCard.classList.add('solution-pop');
+    const start = performance.now();
+    function pulse(now) {
+      solutionPulse = Math.max(0, 1 - (now - start) / 720);
+      draw();
+      if (solutionPulse > 0) feedbackReq = requestAnimationFrame(pulse); else feedbackReq = null;
+    }
+    feedbackReq = requestAnimationFrame(pulse);
+  }
+
+  function drawVertices(poly, best) {
+    if (!showLabelsCheck.checked) return;
+    for (const v of poly) {
+      if (isArtificial(v)) continue;
+      if (best && Math.hypot(v.x - best.x, v.y - best.y) < 1e-6) continue;
+      const p = toScreen(v.x, v.y);
+      pointMarker(p.x, p.y, 1.8);
+      haloText(`(${fmt(v.x)}, ${fmt(v.y)})`, p.x, p.y - 9,
+        { size: 10, mono: true, color: cssVar('--muted-foreground'), align: 'center' });
+    }
+  }
+
+  function drawHint(text) {
+    const w = cssW(), h = cssH();
+    ctx.save();
+    ctx.font = '600 14px ' + cssVar('--font-sans');
+    ctx.textAlign = 'center';
+    ctx.fillStyle = cssVar('--muted-foreground');
+    ctx.fillText(text, w / 2, h / 2 - 8);
+    ctx.restore();
+  }
+
+  function draw() {
+    const w = cssW(), h = cssH();
+    ctx.clearRect(0, 0, w, h);
+    if (showGridCheck.checked) drawGrid();
+    else if (showAxesCheck.checked) {
+      const ox = toScreen(0, 0).x, oy = toScreen(0, 0).y;
+      ctx.strokeStyle = cssVar('--grid-axis'); ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, h); ctx.moveTo(0, oy); ctx.lineTo(w, oy); ctx.stroke();
+    }
+
+    const sol = computeSolution();
+    drawConstraintRegions();
+    drawPolygon(sol.poly);
+    constraints.forEach((c, i) => drawConstraint(c, i));
+    constraints.forEach((c, i) => drawFeasibleArrows(c, i));
+    drawObjective();
+
+    if (sol.status === 'ok') { drawVertices(sol.poly, sol.best); drawBest(sol); }
+    else if (sol.status === 'unbounded') { drawVertices(sol.poly); drawUnboundedArrow(sol.best); }
+    else if (sol.status === 'infeasible') drawHint('约束交集为空：无可行解');
+    else if (sol.status === 'empty') drawHint('请先添加约束和目标函数');
+
+    updateUI(sol);
+  }
+
+  /* ---------- UI ---------- */
+  function setStatusDot(status) {
+    statusIndicator.className = 'status-dot';
+    if (status === 'ok') statusIndicator.classList.add('ok');
+    else if (status === 'unbounded') statusIndicator.classList.add('warn');
+    else if (status === 'infeasible') statusIndicator.classList.add('err');
+  }
+  function showStatus(kind, text) {
+    solutionStatus.className = 'solution-status show' + (kind ? ' ' + kind : '');
+    solutionStatus.innerHTML = `<span class="dot"></span><span>${esc(text)}</span>`;
+  }
+  function hideStatus() { solutionStatus.className = 'solution-status'; solutionStatus.innerHTML = ''; }
+
+  function updateUI(sol) {
+    setStatusDot(sol.status);
+    if (sol.status === 'empty') { solutionCard.hidden = true; return; }
+
+    solutionCard.hidden = false;
+    if (sol.status === 'ok') {
+      solutionTitle.textContent = '最优解';
+      solutionValue.textContent = (direction === 'max' ? 'Zmax = ' : 'Zmin = ') + fmt(sol.value);
+      solutionPoint.textContent = `x1 = ${fmt(sol.best.x)}，x2 = ${fmt(sol.best.y)}`;
+      hideStatus();
+    } else if (sol.status === 'unbounded') {
+      solutionTitle.textContent = '目标函数无界';
+      solutionValue.textContent = direction === 'max' ? 'Z → +∞' : 'Z → −∞';
+      solutionPoint.textContent = '沿梯度方向可行域不封闭';
+      showStatus('warn', direction === 'max' ? '没有上界：可行域在目标增大的方向上无限延伸。' : '没有下界：可行域在目标减小的方向上无限延伸。');
+    } else if (sol.status === 'infeasible') {
+      solutionTitle.textContent = '无可行解';
+      solutionValue.textContent = '—';
+      solutionPoint.textContent = '约束半平面无公共交集';
+      showStatus('err', '请检查约束的符号方向与常数项，当前约束互相矛盾。');
+    }
+    updateVerticesList(sol);
+  }
+
+  function updateVerticesList(sol) {
+    const poly = (sol.poly || []).filter(v => !isArtificial(v));
+    if (poly.length < 3) { verticesList.innerHTML = ''; verticesEmpty.hidden = false; verticesSig = ''; return; }
+    const sig = poly.map(v => `${fmt(v.x)},${fmt(v.y)}`).join(';');
+    if (sig === verticesSig) return;
+    verticesSig = sig;
+    verticesEmpty.hidden = true;
+    verticesList.innerHTML = '';
+    poly.forEach((v, i) => {
+      const val = objective.a * v.x + objective.b * v.y;
+      const isBest = sol.best && Math.hypot(v.x - sol.best.x, v.y - sol.best.y) < 1e-6;
+      const li = document.createElement('li');
+      li.className = 'vertex-item' + (isBest ? ' best' : '');
+      li.innerHTML = `<span class="vertex-index">${i + 1}</span><span class="vertex-coord">(${fmt(v.x)}, ${fmt(v.y)})</span><span class="vertex-value">z=${fmt(val)}</span>`;
+      verticesList.appendChild(li);
+    });
+  }
+
+  function updateConstraintsList() {
+    constraintsList.innerHTML = '';
+    constraintsEmpty.hidden = constraints.length > 0;
+    constraints.forEach((c, idx) => {
+      const li = document.createElement('li');
+      li.className = 'constraint-item';
+      li.dataset.idx = idx;
+      li.innerHTML = `<span class="constraint-color" style="--c:${palette[idx % palette.length]}"></span><span class="constraint-text">${esc(renderConstraint(c))}</span><button class="btn btn-ghost constraint-del" data-idx="${idx}" aria-label="移除约束">×</button>`;
+      li.addEventListener('mouseenter', () => { hoverIdx = idx; highlightList(); draw(); });
+      li.addEventListener('mouseleave', () => { hoverIdx = -1; highlightList(); draw(); });
+      constraintsList.appendChild(li);
+    });
+  }
+  function highlightList() {
+    [...constraintsList.children].forEach(li => li.classList.toggle('active', +li.dataset.idx === hoverIdx));
+  }
+
+  /* ---------- 求解动作 ---------- */
+  function addConstraint(raw) {
+    const parsed = parseConstraint(raw);
+    if (!parsed) return;
+    constraints.push(parsed);
+    updateConstraintsList();
+    constraintsInput.value = '';
+    autoSolveCheck.checked ? startAnimation() : draw();
+  }
+  function removeConstraint(idx) {
+    constraints.splice(idx, 1);
+    if (hoverIdx === idx) hoverIdx = -1;
+    updateConstraintsList();
+    autoSolveCheck.checked ? startAnimation() : draw();
+  }
+
+  function startAnimation() {
+    if (animationReq !== null) cancelAnimationFrame(animationReq);
+    if (animationTween) { animationTween.kill(); animationTween = null; }
+    animationReq = null;
+    animationActive = false;
+    if (!animateCheck.checked) { draw(); return; }
+    const sol = computeSolution();
+    if (sol.status !== 'ok' || !sol.best) { draw(); return; }
+    if (objectiveLevel == null) {
+      const center = toWorld(cssW() / 2, cssH() / 2);
+      objectiveLevel = objective.a * center.x + objective.b * center.y;
+    }
+    const target = sol.value;
+    const speed = parseInt(speedRange.value, 10) / 5;
+    let t = 0;
+    const s0 = objectiveLevel + (direction === 'max' ? -1 : 1) * Math.max(4 * (Math.hypot(objective.a, objective.b) || 1), Math.abs(target - objectiveLevel) + 3);
+    animationLevel = s0;
+    animationActive = true;
+    if (window.gsap) {
+      animationTween = gsap.to({ value: s0 }, {
+        value: target,
+        duration: Math.max(0.55, 2.2 / speed),
+        ease: 'power3.out',
+        onUpdate: function () { animationLevel = this.targets()[0].value; draw(); },
+        onComplete: function () {
+          animationLevel = objectiveLevel = target;
+          animationActive = false; animationTween = null;
+          draw(); triggerSolutionFeedback();
+        }
+      });
+      return;
+    }
+    function frame() {
+      t += 0.025 * speed;
+      if (t >= 1) {
+        animationLevel = objectiveLevel = target;
+        animationActive = false;
+        animationReq = null;
+        draw();
+        triggerSolutionFeedback();
+        return;
+      }
+      animationLevel = s0 + (target - s0) * (1 - Math.pow(1 - t, 3));
+      draw();
+      animationReq = requestAnimationFrame(frame);
+    }
+    frame();
+  }
+
+  function fitToFeasible() {
+    const poly = computeFeasiblePolygon().filter(v => !isArtificial(v));
+    if (poly.length < 3) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of poly) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
+    const pad = 1.25;
+    const w = cssW(), h = cssH();
+    const sx = (maxX - minX) || 1, sy = (maxY - minY) || 1;
+    view.scale = Math.max(20, Math.min(160, Math.min(w / (sx * pad), h / (sy * pad))));
+    view.xMin = minX - sx * (pad - 1) / 2;
+    view.yMin = minY - sy * (pad - 1) / 2;
+    zoomRange.value = Math.round(view.scale);
+    updateZoomLabel();
+    draw();
+  }
+  function updateZoomLabel() { zoomLabel.textContent = Math.round(view.scale / 60 * 100) + '%'; }
+
+  function zoomAt(factor, sx, sy) {
+    const oldScale = view.scale;
+    const anchor = toWorld(sx, sy);
+    const next = Math.max(20, Math.min(160, oldScale * factor));
+    if (next === oldScale) return;
+    view.scale = next;
+    view.xMin = anchor.x - sx / next;
+    view.yMin = anchor.y - (cssH() - sy) / next;
+    zoomRange.value = Math.round(next);
+    updateZoomLabel();
+    draw();
+  }
+
+  /* ---------- 事件 ---------- */
+  constraintsList.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-idx]');
+    if (btn) removeConstraint(+btn.dataset.idx);
+  });
+  addConstraintBtn.addEventListener('click', () => addConstraint(constraintsInput.value));
+  constraintsInput.addEventListener('keydown', e => { if (e.key === 'Enter') addConstraint(constraintsInput.value); });
+  clearConstraintsBtn.addEventListener('click', () => { constraints = []; hoverIdx = -1; updateConstraintsList(); draw(); });
+  solveBtn.addEventListener('click', () => { objective = parseObjective(objectiveInput.value); objectiveLevel = null; startAnimation(); });
+  objectiveInput.addEventListener('change', () => { objective = parseObjective(objectiveInput.value); objectiveLevel = null; autoSolveCheck.checked ? startAnimation() : draw(); });
+  [maxBtn, minBtn].forEach(btn => btn.addEventListener('click', () => {
+    direction = btn.dataset.dir;
+    maxBtn.classList.toggle('active', direction === 'max');
+    minBtn.classList.toggle('active', direction === 'min');
+    autoSolveCheck.checked ? startAnimation() : draw();
+  }));
+  resetViewBtn.addEventListener('click', () => { view = { xMin: -2, yMin: -2, scale: 60 }; zoomRange.value = 60; updateZoomLabel(); draw(); });
+  fitBtn.addEventListener('click', fitToFeasible);
+  zoomRange.addEventListener('input', () => {
+    const old = view.scale, next = +zoomRange.value;
+    const sx = cssW() / 2, sy = cssH() / 2, anchor = toWorld(sx, sy);
+    view.scale = next; view.xMin = anchor.x - sx / next; view.yMin = anchor.y - (cssH() - sy) / next;
+    if (old !== next) { updateZoomLabel(); draw(); }
+  });
+  zoomInBtn.addEventListener('click', () => zoomAt(1.2, cssW() / 2, cssH() / 2));
+  zoomOutBtn.addEventListener('click', () => zoomAt(1 / 1.2, cssW() / 2, cssH() / 2));
+  [showGridCheck, showAxesCheck, showLabelsCheck, showConstraintsCheck].forEach(el => el.addEventListener('change', draw));
+  autoSolveCheck.addEventListener('change', () => { if (autoSolveCheck.checked) startAnimation(); else { if (animationReq !== null) cancelAnimationFrame(animationReq); animationReq = null; animationActive = false; draw(); } });
+  animateCheck.addEventListener('change', () => { if (animateCheck.checked) startAnimation(); else { if (animationReq !== null) cancelAnimationFrame(animationReq); animationReq = null; animationActive = false; draw(); } });
+  snapObjectiveCheck.addEventListener('change', draw);
+  speedRange.addEventListener('input', () => { if (animateCheck.checked && autoSolveCheck.checked) startAnimation(); });
+  exportBtn.addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.download = 'lp-solver.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  });
+  themeToggle.addEventListener('click', () => {
+    const dark = document.documentElement.classList.toggle('dark');
+    themeToggle.textContent = dark ? '切换亮色' : '切换暗色';
+    draw();
+  });
+
+  /* 拖动画布(指针事件统一鼠标/触控) */
+  canvas.addEventListener('pointerdown', e => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    const rect = wrap.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    if (objectiveLineDistance(sx, sy) <= 14) {
+      const currentLevel = animationActive ? animationLevel : objectiveLevel;
+      if (animationReq !== null) cancelAnimationFrame(animationReq);
+      if (animationTween) { animationTween.kill(); animationTween = null; }
+      animationReq = null; animationActive = false;
+      objectiveLevel = currentLevel == null ? objectiveLevelAt(sx, sy) : currentLevel;
+      isDraggingObjective = true; pointerId = e.pointerId;
+      canvas.setPointerCapture(e.pointerId);
+      canvas.classList.add('objective-dragging');
+      e.preventDefault();
+      return;
+    }
+    isDragging = true; isDraggingObjective = false; pointerId = e.pointerId;
+    lastMouse = { x: e.clientX, y: e.clientY };
+    canvas.setPointerCapture(e.pointerId);
+    canvas.classList.add('dragging');
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!isDragging && !isDraggingObjective) {
+      const rect = wrap.getBoundingClientRect();
+      canvas.style.cursor = objectiveLineDistance(e.clientX - rect.left, e.clientY - rect.top) <= 14 ? 'ns-resize' : 'grab';
+      return;
+    }
+    if (e.pointerId !== pointerId) return;
+    if (isDraggingObjective) {
+      const rect = wrap.getBoundingClientRect();
+      objectiveLevel = snapObjectiveLevel(objectiveLevelAt(e.clientX - rect.left, e.clientY - rect.top));
+      animationLevel = objectiveLevel;
+      draw();
+      return;
+    }
+    const dx = (e.clientX - lastMouse.x) / view.scale;
+    const dy = (e.clientY - lastMouse.y) / view.scale;
+    view.xMin -= dx; view.yMin += dy;
+    lastMouse = { x: e.clientX, y: e.clientY };
+    draw();
+  });
+  function endDrag(e) {
+    if (e.pointerId !== pointerId) return;
+    const finishedObjectiveDrag = isDraggingObjective;
+    isDragging = false; pointerId = null;
+    canvas.classList.remove('dragging', 'objective-dragging');
+    isDraggingObjective = false;
+    if (finishedObjectiveDrag) {
+      const sol = computeSolution();
+      if (sol.status === 'ok' && sol.value != null && objectiveLevel != null) {
+        const tolerance = 1e-5 * Math.max(1, Math.abs(sol.value));
+        if (Math.abs(objectiveLevel - sol.value) <= tolerance) triggerSolutionFeedback();
+      }
+    }
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = wrap.getBoundingClientRect();
+    zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - rect.left, e.clientY - rect.top);
+  }, { passive: false });
+
+  window.addEventListener('resize', resize);
+
+  /* ---------- 初始化 ---------- */
+  sampleConstraints.forEach(c => constraints.push({ ...c }));
+  updateConstraintsList();
+  resize();
+  fitToFeasible();
+  setTimeout(() => { if (autoSolveCheck.checked) startAnimation(); }, 300);
+})();
+</script>
+</body>
+</html>
