@@ -276,6 +276,25 @@ button { cursor: pointer; border: 0; background: none; color: inherit; }
 .slider-wrap { display: flex; align-items: center; gap: 10px; }
 .slider-wrap .hint { flex: none; width: 28px; }
 input[type="range"] { flex: 1; accent-color: var(--control-accent); height: 18px; margin: 0; cursor: pointer; }
+input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  height: 18px; background: transparent; outline: none;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 99px;
+  background: linear-gradient(90deg, var(--control-accent), color-mix(in srgb, var(--control-accent) 28%, var(--border)));
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 16px; height: 16px; margin-top: -6px;
+  border: 2px solid var(--card); border-radius: 50%;
+  background: var(--control-accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+input[type="range"]::-moz-range-track { height: 4px; border-radius: 99px; background: var(--border); }
+input[type="range"]::-moz-range-progress { height: 4px; border-radius: 99px; background: var(--control-accent); }
+input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 2px solid var(--card); border-radius: 50%; background: var(--control-accent); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.slider-wrap .hint { font-variant-numeric: tabular-nums; }
 
 /* ============ 主区 ============ */
 .main { position: relative; display: flex; flex-direction: column; background: var(--background); overflow: hidden; }
@@ -376,7 +395,7 @@ canvas.objective-dragging { cursor: ns-resize; }
     <section class="section">
       <h2 class="section-title">目标函数</h2>
       <div class="stack">
-        <input id="objectiveInput" class="input input-mono" type="text" placeholder="例如：4x1 + 3x2" value="4x1 + 3x2" aria-label="目标函数" spellcheck="false">
+        <input id="objectiveInput" class="input input-mono" type="text" placeholder="例如：4x1 + 3x2" value="" aria-label="目标函数" spellcheck="false">
         <div class="row row-between">
           <div class="seg" role="group" aria-label="优化方向">
             <button id="maxBtn" class="seg-btn active" data-dir="max">最大化</button>
@@ -401,7 +420,7 @@ canvas.objective-dragging { cursor: ns-resize; }
         <label class="checkbox-wrap"><input id="snapObjectiveCheck" type="checkbox" checked><span>等值线自动吸附顶点</span></label>
         <div class="slider-wrap">
           <span class="hint">速度</span>
-          <input id="speedRange" type="range" min="1" max="10" value="5">
+          <input id="speedRange" type="range" min="1" max="10" value="7">
         </div>
         <div class="row">
           <button id="resetViewBtn" class="btn btn-secondary btn-sm">重置视图</button>
@@ -416,7 +435,7 @@ canvas.objective-dragging { cursor: ns-resize; }
         <label class="checkbox-wrap"><input id="showGridCheck" type="checkbox" checked><span>显示网格</span></label>
         <label class="checkbox-wrap"><input id="showAxesCheck" type="checkbox" checked><span>显示坐标轴</span></label>
         <label class="checkbox-wrap"><input id="showLabelsCheck" type="checkbox" checked><span>标注顶点坐标</span></label>
-        <label class="checkbox-wrap"><input id="showConstraintsCheck" type="checkbox" checked><span>显示约束文字</span></label>
+        <label class="checkbox-wrap"><input id="showConstraintsCheck" type="checkbox"><span>显示约束文字</span></label>
         <div class="slider-wrap">
           <span class="hint">缩放</span>
           <input id="zoomRange" type="range" min="20" max="160" value="60">
@@ -490,7 +509,7 @@ canvas.objective-dragging { cursor: ns-resize; }
   const palette = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#06b6d4', '#ec4899', '#84cc16', '#f97316'];
 
   let constraints = [];
-  let objective = { a: 4, b: 3 };
+  let objective = { a: 0, b: 0 };
   let direction = 'max';
   let view = { xMin: -2, yMin: -2, scale: 60 };
   let objectiveLevel = null, animationLevel = 0, animationReq = null, animationActive = false, animationTween = null;
@@ -850,12 +869,13 @@ canvas.objective-dragging { cursor: ns-resize; }
     const mid = { x: (s1.x + s2.x) / 2, y: (s1.y + s2.y) / 2 };
     const sign = direction === 'max' ? 1 : -1;
     const gdx = sign * nx, gdy = -sign * ny;   // 屏幕坐标
-    const ax = mid.x + gdx * 14, ay = mid.y + gdy * 14;
+    // 把箭头和数值标签从等值线向外错开，避免文字压在线上。
+    const ax = mid.x + gdx * 18, ay = mid.y + gdy * 18;
     ctx.fillStyle = color;
     ctx.globalAlpha = .9;
     ctx.beginPath(); ctx.arc(mid.x, mid.y, 3.5, 0, Math.PI * 2); ctx.fill();
     chevronAt(ax, ay, gdx, gdy, 8, color, 0.95);
-    haloText(`Z = ${fmt(level)}`, ax + gdx * 18, ay + gdy * 18 + 4,
+    haloText(`Z = ${fmt(level)}`, ax + gdx * 30, ay + gdy * 30 + 4,
       { color, bold: true, size: 14, mono: true, align: 'center' });
     ctx.restore();
   }
@@ -1114,6 +1134,17 @@ canvas.objective-dragging { cursor: ns-resize; }
     autoSolveCheck.checked ? startAnimation() : draw();
   }
 
+  // 动画从可行顶点的“起始端”开始：最大化从最小 Z 扫到最大值，
+  // 最小化则从最大 Z 扫到最小值。若当前没有有限顶点，退回原点 Z=0。
+  function animationStartLevel(sol) {
+    const vertices = (sol && sol.poly || []).filter(v => !isArtificial(v));
+    const values = vertices
+      .map(v => objective.a * v.x + objective.b * v.y)
+      .filter(Number.isFinite);
+    if (!values.length) return 0;
+    return direction === 'max' ? Math.min(...values) : Math.max(...values);
+  }
+
   function startAnimation() {
     if (animationReq !== null) cancelAnimationFrame(animationReq);
     if (animationTween) { animationTween.kill(); animationTween = null; }
@@ -1122,14 +1153,11 @@ canvas.objective-dragging { cursor: ns-resize; }
     if (!animateCheck.checked) { draw(); return; }
     const sol = computeSolution();
     if (sol.status !== 'ok' || !sol.best) { draw(); return; }
-    if (objectiveLevel == null) {
-      const center = toWorld(cssW() / 2, cssH() / 2);
-      objectiveLevel = objective.a * center.x + objective.b * center.y;
-    }
     const target = sol.value;
     const speed = parseInt(speedRange.value, 10) / 5;
     let t = 0;
-    const s0 = objectiveLevel + (direction === 'max' ? -1 : 1) * Math.max(4 * (Math.hypot(objective.a, objective.b) || 1), Math.abs(target - objectiveLevel) + 3);
+    const s0 = animationStartLevel(sol);
+    objectiveLevel = s0;
     animationLevel = s0;
     animationActive = true;
     if (window.gsap) {
@@ -1305,7 +1333,7 @@ canvas.objective-dragging { cursor: ns-resize; }
   window.addEventListener('resize', resize);
 
   /* ---------- 初始化 ---------- */
-  sampleConstraints.forEach(c => constraints.push({ ...c }));
+  // 默认保持空白状态：用户添加约束和目标函数后才开始绘制。
   updateConstraintsList();
   resize();
   fitToFeasible();
