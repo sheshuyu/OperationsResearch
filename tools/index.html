@@ -447,14 +447,22 @@ canvas.objective-dragging { cursor: ns-resize; }
   .shell.sidebar-collapsed { grid-template-columns: 1fr; grid-template-rows: 1fr; }
   .main { grid-row: 1; min-height: 0; }
 
-  .topbar { backdrop-filter: none; }
+  .topbar {
+    margin: 12px 12px 0;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.10);
+  }
   .topbar-brand { display: flex; }
 
   .sidebar {
     position: fixed;
-    left: 0; right: 0; bottom: 0;
+    left: 12px; right: 12px; bottom: 12px;
     height: 38vh; max-height: none;
     border-right: 0; border-top: 0; border-bottom: 0;
+    border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
     overflow-y: auto;
     padding: 0 0 12px;
     gap: 0;
@@ -476,32 +484,30 @@ canvas.objective-dragging { cursor: ns-resize; }
   .sidebar .brand .sidebar-toggle {
     pointer-events: auto;
     margin-left: 0;
-    width: 44px;
-    height: 24px;
-    min-height: 24px;
+    width: 42px;
+    height: 4px;
+    min-height: 4px;
     padding: 0;
     border-radius: 999px;
-    background: var(--card);
-    border: 1px solid var(--border);
+    background: var(--muted-foreground);
+    border: 0;
     font-size: 0;
+    opacity: 0.55;
   }
   .sidebar .brand .sidebar-toggle::after {
-    content: '▾';
-    font-size: 15px;
-    line-height: 1;
-    color: var(--muted-foreground);
+    content: '';
   }
   .sidebar .section { margin: 12px 12px 0; }
 
   .shell.sidebar-collapsed .sidebar {
-    transform: translateY(102%);
+    transform: translateY(110%);
     opacity: 0;
     pointer-events: none;
   }
 
   .solution-card {
     position: fixed;
-    left: 12px; right: 12px; bottom: calc(38vh + 12px);
+    left: 12px; right: 12px; bottom: calc(38vh + 24px);
     min-width: 0; max-width: none;
     padding: 12px 14px;
     border-radius: 14px;
@@ -1291,7 +1297,8 @@ canvas.objective-dragging { cursor: ns-resize; }
 
   function updateUI(sol) {
     setStatusDot(sol.status);
-    if (sol.status === 'empty') { solutionCard.hidden = true; return; }
+    const hasObjective = Math.abs(objective.a) > 1e-9 || Math.abs(objective.b) > 1e-9;
+    if (sol.status === 'empty' || !hasObjective) { solutionCard.hidden = true; return; }
 
     solutionCard.hidden = false;
     if (sol.status === 'ok') {
