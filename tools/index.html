@@ -35,8 +35,8 @@
   --destructive-soft: #fef2f2;
 
   /* 几何语义色 */
-  --feasible-fill: rgba(100, 116, 139, 0.10);
-  --feasible-stroke: rgba(100, 116, 139, 0.50);
+  --feasible-fill: rgba(37, 99, 235, 0.18);
+  --feasible-stroke: rgba(37, 99, 235, 0.86);
   --objective-stroke: #7c3aed;
   --solution-core: #0d9488;
   --vertex-mark: #52525b;
@@ -84,8 +84,8 @@
   --destructive: #f87171;
   --destructive-soft: #2a1215;
 
-  --feasible-fill: rgba(148, 163, 184, 0.09);
-  --feasible-stroke: rgba(148, 163, 184, 0.55);
+  --feasible-fill: rgba(96, 165, 250, 0.22);
+  --feasible-stroke: rgba(125, 211, 252, 0.90);
   --objective-stroke: #a78bfa;
   --solution-core: #2dd4bf;
   --vertex-mark: #a1a1aa;
@@ -181,7 +181,12 @@ button { cursor: pointer; border: 0; background: none; color: inherit; }
 }
 .input:focus { border-color: var(--control-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--control-accent) 18%, transparent); }
 .input::placeholder { color: var(--muted-foreground); opacity: .7; }
-.input-mono { font-family: var(--font-mono); font-size: 12px; }
+.input-mono {
+  /* Chrome 某些等宽字体会把 >= 做连字替换，输入过程中看起来像多出一个符号。 */
+  font-family: Consolas, "Courier New", monospace; font-size: 12px;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "clig" 0, "calt" 0;
+}
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -220,7 +225,12 @@ button { cursor: pointer; border: 0; background: none; color: inherit; }
   border: 1px solid var(--border);
   transition: border-color .12s ease, background-color .12s ease, opacity .12s ease;
 }
-.constraint-text, .vertex-coord { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.constraint-text, .vertex-coord {
+  font-family: var(--font-mono); font-size: 12px;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "clig" 0, "calt" 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .constraint-color { width: 9px; height: 9px; border-radius: 3px; background: var(--c); flex-shrink: 0; }
 .constraint-del { color: var(--muted-foreground); width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; font-size: 14px; line-height: 1; }
 .constraint-del:hover { color: var(--destructive); background: var(--destructive-soft); }
@@ -559,11 +569,12 @@ canvas.objective-dragging { cursor: ns-resize; }
     return { raw, a: l.a - r.a, b: l.b - r.b, op, c: r.c - l.c };
   }
   function parseObjective(raw) { const t = parseTerms(raw); return { a: t.a, b: t.b }; }
+  function displayOperator(op) { return op === '>=' ? '≥' : (op === '<=' ? '≤' : '='); }
   function renderConstraint(c) {
     const terms = [];
     if (Math.abs(c.a) > 1e-9) terms.push(`${fmt(c.a)}x1`);
     if (Math.abs(c.b) > 1e-9) terms.push(`${fmt(c.b)}x2`);
-    return `${(terms.length ? terms.join(' + ').replace(/\+ -/g, '- ') : '0')} ${c.op} ${fmt(c.c)}`;
+    return `${(terms.length ? terms.join(' + ').replace(/\+ -/g, '- ') : '0')} ${displayOperator(c.op)} ${fmt(c.c)}`;
   }
   function fmt(n) { if (Math.abs(n) < 1e-9) n = 0; return Number.isInteger(n) ? n.toString() : (+n.toFixed(3)).toString(); }
   function esc(s) { return s.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
@@ -764,12 +775,15 @@ canvas.objective-dragging { cursor: ns-resize; }
     ctx.moveTo(f.x, f.y);
     for (let i = 1; i < poly.length; i++) { const p = toScreen(poly[i].x, poly[i].y); ctx.lineTo(p.x, p.y); }
     ctx.closePath();
+    // 最终可行域使用更高对比度的填充和边缘光晕，与各半平面明显区分。
     ctx.save();
-    ctx.globalAlpha = 0.72;
+    ctx.globalAlpha = 1;
     ctx.fillStyle = cssVar('--feasible-fill');
+    ctx.shadowColor = cssVar('--feasible-stroke');
+    ctx.shadowBlur = 10;
     ctx.fill();
     ctx.restore();
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 2.4;
     ctx.strokeStyle = cssVar('--feasible-stroke');
     ctx.stroke();
   }
@@ -809,12 +823,13 @@ canvas.objective-dragging { cursor: ns-resize; }
     ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
 
-    // 标签:放在线段靠 p2 一端的上方
+    // 标签沿法向移出约束线，避免线条穿过不等式符号造成“多一个 +”的错觉。
     const lx = (p1.x + p2.x) / 2, ly = (p1.y + p2.y) / 2;
-    const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-    const tx = lx + Math.cos(ang) * 18, ty = ly + Math.sin(ang) * 18;
+    const lineLen = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
+    const nx = -(p2.y - p1.y) / lineLen, ny = (p2.x - p1.x) / lineLen;
+    const tx = lx + nx * 16, ty = ly + ny * 16;
     if (showConstraintsCheck.checked) {
-      haloText(renderConstraint(c), tx, ty - 6, { color, bold: true, size: 11, mono: true, align: 'left' });
+      haloText(renderConstraint(c), tx, ty, { color, bold: true, size: 11, mono: true, align: 'left' });
     }
     ctx.restore();
   }
