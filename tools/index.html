@@ -397,16 +397,20 @@ canvas.objective-dragging { cursor: ns-resize; }
 .status-dot.err { background: var(--destructive); }
 
 @media (max-width: 880px) {
-  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: 100dvh; }
+  .shell.sidebar-collapsed { grid-template-columns: 1fr; grid-template-rows: 0 1fr; }
   .sidebar { max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--sidebar-border); }
+  .main { min-height: 0; }
   .solution-card { left: 12px; right: 12px; min-width: 0; }
 }
 @media (max-width: 880px) and (orientation: portrait) {
   .shell { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
   .main { grid-row: 1; min-height: 0; }
   .sidebar { grid-row: 2; max-height: 38vh; border-top: 1px solid var(--sidebar-border); border-bottom: 0; overflow-y: auto; }
-  .shell.sidebar-collapsed { grid-template-rows: 1fr 0; }
+  .shell.sidebar-collapsed { grid-template-columns: 1fr; grid-template-rows: 1fr 0; }
   .shell.sidebar-collapsed .sidebar { transform: translateY(18px); }
+  .sidebar-reopen { top: auto; bottom: 12px; left: 50%; transform: translateX(-50%); }
+  body.sidebar-collapsed .solution-card { bottom: 56px; }
 }
 </style>
 </head>
@@ -568,6 +572,7 @@ canvas.objective-dragging { cursor: ns-resize; }
   let isDragging = false, isDraggingObjective = false, pointerId = null, lastMouse = { x: 0, y: 0 };
   let hoverIdx = -1;
   let verticesSig = '';
+  let pixelRatio = 1;
   const ART = 400; // 超出此范围视为裁剪框的人为顶点
 
   const sampleConstraints = [
@@ -621,17 +626,19 @@ canvas.objective-dragging { cursor: ns-resize; }
 
   /* ---------- 视图 ---------- */
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     const rect = wrap.getBoundingClientRect();
-    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    canvas.style.width = rect.width + 'px';
-    canvas.style.height = rect.height + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cssWidth = Math.max(1, Math.round(rect.width));
+    const cssHeight = Math.max(1, Math.round(rect.height));
+    canvas.width = Math.max(1, Math.round(cssWidth * pixelRatio));
+    canvas.height = Math.max(1, Math.round(cssHeight * pixelRatio));
+    canvas.style.width = cssWidth + 'px';
+    canvas.style.height = cssHeight + 'px';
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     draw();
   }
-  function cssW() { return canvas.width / (window.devicePixelRatio || 1); }
-  function cssH() { return canvas.height / (window.devicePixelRatio || 1); }
+  function cssW() { return canvas.width / pixelRatio; }
+  function cssH() { return canvas.height / pixelRatio; }
   function toScreen(x, y) { return { x: (x - view.xMin) * view.scale, y: cssH() - (y - view.yMin) * view.scale }; }
   function toWorld(sx, sy) { return { x: view.xMin + sx / view.scale, y: view.yMin + (cssH() - sy) / view.scale }; }
   function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
@@ -1536,6 +1543,13 @@ canvas.objective-dragging { cursor: ns-resize; }
   }, { passive: false });
 
   window.addEventListener('resize', resize);
+
+  // 菜单收起/展开、手机浏览器地址栏变化、横竖屏切换时，画布尺寸会异步变化。
+  // 用 ResizeObserver 持续同步画布，避免残留和留白。
+  if (window.ResizeObserver) {
+    const observer = new ResizeObserver(() => resize());
+    observer.observe(wrap);
+  }
 
   /* ---------- 初始化 ---------- */
   // 默认保持空白状态：用户添加约束和目标函数后才开始绘制。
