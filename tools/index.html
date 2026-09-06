@@ -26,6 +26,9 @@
   --border: #e4e4e7;
 
   --control-accent: #18181b;
+  --scrollbar-thumb: #c4c4cc;
+  --scrollbar-thumb-strong: #8b8b96;
+  --scrollbar-track: rgba(0, 0, 0, 0.035);
 
   /* 状态(柔和) */
   --success: #16a34a;
@@ -79,6 +82,9 @@
   --border: #27272a;
 
   --control-accent: #e4e4e7;
+  --scrollbar-thumb: #3f3f46;
+  --scrollbar-thumb-strong: #71717a;
+  --scrollbar-track: rgba(255, 255, 255, 0.035);
 
   --success: #4ade80;
   --warning: #fbbf24;
@@ -135,12 +141,32 @@ button { cursor: pointer; border: 0; background: none; color: inherit; }
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-strong) transparent;
   transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .2s ease, padding .28s ease;
 }
-.sidebar::-webkit-scrollbar { width: 6px; }
-.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-.sidebar::-webkit-scrollbar-track { background: var(--sidebar); }
-.dark .sidebar::-webkit-scrollbar-thumb { background: #3f3f46; }
+.sidebar::-webkit-scrollbar { width: 8px; }
+.sidebar::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 999px;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--scrollbar-thumb-strong), var(--scrollbar-thumb), var(--scrollbar-thumb-strong));
+  background-size: 100% 200%;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  min-height: 44px;
+  animation: scrollbarFlow 4.5s ease-in-out infinite;
+  transition: box-shadow .22s ease;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+  box-shadow: 0 0 14px color-mix(in srgb, var(--control-accent) 65%, transparent);
+}
+
+@keyframes scrollbarFlow {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 0% 100%; }
+}
 
 .brand { display: flex; align-items: center; gap: 10px; padding: 8px 10px 4px; }
 .brand-mark {
@@ -333,11 +359,15 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 2px s
   background: color-mix(in srgb, var(--card) 70%, transparent);
   backdrop-filter: blur(8px);
 }
-.topbar-title { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
-.topbar-actions { display: flex; align-items: center; gap: 8px; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.topbar-brand { display: none; align-items: center; gap: 8px; }
+.topbar-brand .brand-mark { width: 26px; height: 26px; border-radius: 7px; }
+.topbar-brand .brand-mark svg { width: 14px; height: 14px; }
+.topbar-brand .brand-copy strong { font-size: 13px; }
+.topbar-brand .brand-copy span { display: none; }
 .sidebar-toggle { min-width: 32px; padding: 0 9px; }
 .brand .sidebar-toggle { margin-left: auto; }
-.sidebar-reopen { display: none; position: fixed; top: calc(var(--solver-header) + 12px); left: 12px; z-index: 100; }
+.sidebar-reopen { display: none; position: fixed; top: 13px; left: 12px; z-index: 100; }
 body.sidebar-collapsed .sidebar-reopen { display: inline-flex; }
 
 .canvas-wrap { flex: 1; position: relative; overflow: hidden; background: var(--background); }
@@ -400,17 +430,103 @@ canvas.objective-dragging { cursor: ns-resize; }
   .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: 100dvh; }
   .shell.sidebar-collapsed { grid-template-columns: 1fr; grid-template-rows: 0 1fr; }
   .sidebar { max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--sidebar-border); }
+  .sidebar::-webkit-scrollbar { width: 6px; }
+  .sidebar::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-strong);
+    background-size: auto;
+    animation: none;
+    border: 0;
+    min-height: 28px;
+    border-radius: 999px;
+  }
   .main { min-height: 0; }
   .solution-card { left: 12px; right: 12px; min-width: 0; }
 }
 @media (max-width: 880px) and (orientation: portrait) {
-  .shell { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .shell { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+  .shell.sidebar-collapsed { grid-template-columns: 1fr; grid-template-rows: 1fr; }
   .main { grid-row: 1; min-height: 0; }
-  .sidebar { grid-row: 2; max-height: 38vh; border-top: 1px solid var(--sidebar-border); border-bottom: 0; overflow-y: auto; }
-  .shell.sidebar-collapsed { grid-template-columns: 1fr; grid-template-rows: 1fr 0; }
-  .shell.sidebar-collapsed .sidebar { transform: translateY(18px); }
-  .sidebar-reopen { top: auto; bottom: 12px; left: 50%; transform: translateX(-50%); }
-  body.sidebar-collapsed .solution-card { bottom: 56px; }
+
+  .topbar { backdrop-filter: none; }
+  .topbar-brand { display: flex; }
+
+  .sidebar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: 38vh; max-height: none;
+    border-right: 0; border-top: 0; border-bottom: 0;
+    overflow-y: auto;
+    padding: 0 0 12px;
+    gap: 0;
+    z-index: 40;
+  }
+  .sidebar .brand {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    justify-content: center;
+    margin: 0;
+    padding: 8px 0 8px;
+    background: transparent;
+    border-bottom: 0;
+    pointer-events: none;
+  }
+  .sidebar .brand-mark,
+  .sidebar .brand-copy { display: none; }
+  .sidebar .brand .sidebar-toggle {
+    pointer-events: auto;
+    margin-left: 0;
+    width: 44px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+    border-radius: 999px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    font-size: 0;
+  }
+  .sidebar .brand .sidebar-toggle::after {
+    content: '▾';
+    font-size: 15px;
+    line-height: 1;
+    color: var(--muted-foreground);
+  }
+  .sidebar .section { margin: 12px 12px 0; }
+
+  .shell.sidebar-collapsed .sidebar {
+    transform: translateY(102%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .solution-card {
+    position: fixed;
+    left: 12px; right: 12px; bottom: calc(38vh + 12px);
+    min-width: 0; max-width: none;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    z-index: 45;
+    transition: bottom .32s cubic-bezier(.2,.8,.2,1), right .32s cubic-bezier(.2,.8,.2,1), transform .32s ease;
+  }
+  body.sidebar-collapsed .solution-card { bottom: 12px; }
+
+  .sidebar-reopen {
+    position: fixed;
+    top: auto; left: auto;
+    bottom: 12px; right: 12px;
+    width: 48px; height: 48px;
+    padding: 0;
+    border-radius: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  }
+  body.sidebar-collapsed .solution-card { right: 72px; }
 }
 </style>
 </head>
@@ -486,7 +602,7 @@ canvas.objective-dragging { cursor: ns-resize; }
         <label class="checkbox-wrap"><input id="showFeasibleOnlyCheck" type="checkbox"><span>仅显示可行域</span></label>
         <div class="slider-wrap">
           <span class="hint">缩放</span>
-          <input id="zoomRange" type="range" min="20" max="160" value="60">
+          <input id="zoomRange" type="range" min="6" max="160" value="60">
         </div>
       </div>
     </section>
@@ -494,7 +610,13 @@ canvas.objective-dragging { cursor: ns-resize; }
 
   <main class="main">
     <header class="topbar">
-      <h1 class="topbar-title">几何可视化</h1>
+      <div class="topbar-brand">
+        <div class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 18V6M5 18h14"/><path d="m8 14 3-3 3 2 4-5"/><circle cx="8" cy="14" r="1" fill="currentColor" stroke="none"/><circle cx="11" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="14" cy="13" r="1" fill="currentColor" stroke="none"/><circle cx="18" cy="8" r="1" fill="currentColor" stroke="none"/></svg></div>
+        <div class="brand-copy">
+          <strong>LP Solver</strong>
+          <span>二元线性规划可视化求解器</span>
+        </div>
+      </div>
       <div class="topbar-actions">
         <span id="statusIndicator" class="status-dot ok" aria-label="就绪"></span>
         <button id="themeToggle" class="btn btn-ghost btn-sm">切换亮色</button>
@@ -517,7 +639,7 @@ canvas.objective-dragging { cursor: ns-resize; }
     </div>
   </main>
 </div>
-<button id="sidebarReopen" class="btn btn-ghost btn-sm sidebar-reopen" aria-label="展开菜单栏">☰ 菜单</button>
+<button id="sidebarReopen" class="btn btn-ghost btn-sm sidebar-reopen" aria-label="展开菜单栏">☰</button>
 
 <!-- GSAP 用于等值线和求解反馈的时间线动画；无网络时自动回退到原生动画。 -->
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
@@ -1385,7 +1507,7 @@ canvas.objective-dragging { cursor: ns-resize; }
     const pad = 1.25;
     const w = cssW(), h = cssH();
     const sx = (maxX - minX) || 1, sy = (maxY - minY) || 1;
-    view.scale = Math.max(20, Math.min(160, Math.min(w / (sx * pad), h / (sy * pad))));
+    view.scale = Math.max(6, Math.min(160, Math.min(w / (sx * pad), h / (sy * pad))));
     view.xMin = minX - sx * (pad - 1) / 2;
     view.yMin = minY - sy * (pad - 1) / 2;
     zoomRange.value = Math.round(view.scale);
@@ -1397,7 +1519,7 @@ canvas.objective-dragging { cursor: ns-resize; }
   function zoomAt(factor, sx, sy) {
     const oldScale = view.scale;
     const anchor = toWorld(sx, sy);
-    const next = Math.max(20, Math.min(160, oldScale * factor));
+    const next = Math.max(6, Math.min(160, oldScale * factor));
     if (next === oldScale) return;
     view.scale = next;
     view.xMin = anchor.x - sx / next;
