@@ -464,13 +464,6 @@ canvas.objective-dragging { cursor: ns-resize; }
   .shell.sidebar-collapsed { grid-template-columns: 1fr; grid-template-rows: 1fr; }
   .main { grid-row: 1; min-height: 0; }
 
-  .topbar {
-    margin: 12px 12px 0;
-    border-radius: 14px;
-    border: 1px solid var(--border);
-    background: var(--card);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.10);
-  }
   .topbar-brand { display: flex; }
   .input, .input-mono {
     min-height: 44px;
@@ -598,6 +591,13 @@ canvas.objective-dragging { cursor: ns-resize; }
       <h2 class="section-title">目标函数</h2>
       <div class="stack">
         <input id="objectiveInput" class="input input-mono" type="text" placeholder="例如：4x1 + 3x2" value="" aria-label="目标函数" spellcheck="false">
+        <div class="symbol-row" id="objectiveSymbols" aria-label="常用符号">
+          <button type="button" data-symbol="x1">x1</button>
+          <button type="button" data-symbol="x2">x2</button>
+          <button type="button" data-symbol="+">+</button>
+          <button type="button" data-symbol="-">−</button>
+          <button type="button" data-symbol="=">=</button>
+        </div>
         <div class="row row-between">
           <div class="seg" role="group" aria-label="优化方向">
             <button id="maxBtn" class="seg-btn active" data-dir="max">最大化</button>
@@ -690,6 +690,7 @@ canvas.objective-dragging { cursor: ns-resize; }
   const $ = id => document.getElementById(id);
   const constraintsInput = $('constraintInput');
   const constraintSymbols = $('constraintSymbols');
+  const objectiveSymbols = $('objectiveSymbols');
   const constraintsList = $('constraintsList');
   const constraintsEmpty = $('constraintsEmpty');
   const objectiveInput = $('objectiveInput');
@@ -731,6 +732,7 @@ canvas.objective-dragging { cursor: ns-resize; }
   let regionReveal = 1, constraintReveal = 1, geometryTween = null;
   let hoverVertex = null, hoverVertexTween = null, hoverVertexPulse = 0;
   let isDragging = false, isDraggingObjective = false, pointerId = null, lastMouse = { x: 0, y: 0 };
+  let pinchDist = 0, pinchCenter = null, pinching = false;
   let hoverIdx = -1;
   let verticesSig = '';
   let pixelRatio = 1;
@@ -1570,17 +1572,21 @@ canvas.objective-dragging { cursor: ns-resize; }
   }
 
   /* ---------- 事件 ---------- */
-  function insertConstraintSymbol(symbol) {
-    const start = constraintsInput.selectionStart ?? constraintsInput.value.length;
-    const end = constraintsInput.selectionEnd ?? constraintsInput.value.length;
-    constraintsInput.value = constraintsInput.value.slice(0, start) + symbol + constraintsInput.value.slice(end);
+  function insertSymbolInto(input, symbol) {
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    input.value = input.value.slice(0, start) + symbol + input.value.slice(end);
     const pos = start + symbol.length;
-    constraintsInput.setSelectionRange(pos, pos);
-    constraintsInput.focus();
+    input.setSelectionRange(pos, pos);
+    input.focus();
   }
   constraintSymbols.addEventListener('click', e => {
     const btn = e.target.closest('button[data-symbol]');
-    if (btn) insertConstraintSymbol(btn.dataset.symbol);
+    if (btn) insertSymbolInto(constraintsInput, btn.dataset.symbol);
+  });
+  objectiveSymbols.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-symbol]');
+    if (btn) insertSymbolInto(objectiveInput, btn.dataset.symbol);
   });
   constraintsList.addEventListener('click', e => {
     const edit = e.target.closest('button[data-edit]');
@@ -1648,6 +1654,7 @@ canvas.objective-dragging { cursor: ns-resize; }
 
   /* 拖动画布(指针事件统一鼠标/触控) */
   canvas.addEventListener('pointerdown', e => {
+    if (pinching) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const rect = wrap.getBoundingClientRect();
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
@@ -1671,6 +1678,7 @@ canvas.objective-dragging { cursor: ns-resize; }
     e.preventDefault();
   });
   canvas.addEventListener('pointermove', e => {
+    if (pinching) return;
     if (!isDragging && !isDraggingObjective) {
       const rect = wrap.getBoundingClientRect();
       const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
@@ -1709,6 +1717,66 @@ canvas.objective-dragging { cursor: ns-resize; }
   }
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
+
+  /* 手机双指缩放坐标轴 */
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      pinching = true;
+      isDragging = false;
+      isDraggingObjective = false;
+      pointerId = null;
+      canvas.classList.remove('dragging', 'objective-dragging');
+      pinchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      pinchCenter = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+      };
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', e => {
+    if (e.touches.length !== 2 || pinchDist <= 0) return;
+    e.preventDefault();
+    const rect = wrap.getBoundingClientRect();
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const cx = (t0.clientX + t1.clientX) / 2 - rect.left;
+    const cy = (t0.clientY + t1.clientY) / 2 - rect.top;
+    const newDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+    const factor = newDist / pinchDist;
+
+    const dx = (cx - pinchCenter.x) / view.scale;
+    const dy = (cy - pinchCenter.y) / view.scale;
+    view.xMin -= dx;
+    view.yMin += dy;
+
+    const anchor = toWorld(cx, cy);
+    const oldScale = view.scale;
+    const next = Math.max(6, Math.min(160, oldScale * factor));
+    if (next !== oldScale) {
+      view.scale = next;
+      view.xMin = anchor.x - cx / next;
+      view.yMin = anchor.y - (cssH() - cy) / next;
+      zoomRange.value = Math.round(next);
+      updateZoomLabel();
+    }
+
+    pinchDist = newDist;
+    pinchCenter = { x: cx, y: cy };
+    draw();
+  }, { passive: false });
+
+  function endPinch() {
+    pinchDist = 0;
+    pinchCenter = null;
+    pinching = false;
+  }
+  canvas.addEventListener('touchend', e => {
+    if (e.touches.length < 2) endPinch();
+  });
+  canvas.addEventListener('touchcancel', endPinch);
 
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
